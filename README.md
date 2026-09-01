@@ -5,8 +5,9 @@ This repository packages
 OS app (formerly called an add-on).
 
 It makes the host advertise an Apple TV Companion Link endpoint. The native
-iPhone Control Center Remote pairs with that endpoint, and commands are sent
-to a Samsung Tizen television over its local TLS WebSocket API.
+iPhone Control Center Remote and Apple Watch Remote pair with that endpoint,
+and commands are sent to a Samsung Tizen television over its local TLS
+WebSocket API.
 
 ## Install from GitHub
 
@@ -43,4 +44,3 @@ new upstream release and its signed `atvr4samsung-X.Y.Z-release.env`, update the
 digest in `atvr4samsung/Dockerfile`, then bump the wrapper version and changelog.
 
 See [UPSTREAM.md](UPSTREAM.md) for the currently pinned release.
-

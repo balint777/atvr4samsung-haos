@@ -1,9 +1,9 @@
 name: atvr4samsung Companion Bridge
-version: "0.1.2"
+version: "0.1.3"
 slug: atvr4samsung
 description: >-
-  Emulate an Apple TV Companion endpoint and relay the native iPhone Remote to
-  a Samsung Tizen TV.
+  Emulate an Apple TV Companion endpoint and relay the native iPhone and Apple
+  Watch Remotes to a Samsung Tizen TV.
 url: https://github.com/balint777/atvr4samsung-haos
 stage: experimental
 startup: services

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+- Added per-connection negotiation for the different implicit ChaCha20-Poly1305
+  nonce layouts used by iOS and watchOS Companion clients.
+- Accept identifier-less Companion response frames from Apple Watch without
+  counting them as malformed commands.
+
 ## 0.1.2
 
 - Added the current iOS movement phase (`_tPh=2`) to the gesture mapping and
