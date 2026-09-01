@@ -1,0 +1,44 @@
+configuration:
+  device_name:
+    name: Remote device name
+    description: Name shown in the iPhone Apple TV Remote target picker.
+  companion_port:
+    name: Companion TCP port
+    description: Fixed host-network port used by the emulated Apple TV endpoint.
+  apple_tv_model:
+    name: Advertised Apple TV model
+    description: Companion model identifier; keep AppleTV14,1 unless troubleshooting compatibility.
+  samsung_host:
+    name: Samsung TV address
+    description: Reserved IPv4 address or LAN hostname of the television.
+  samsung_mac:
+    name: Samsung TV MAC address
+    description: MAC of the network interface used by the television, for Wake-on-LAN.
+  samsung_remote_name:
+    name: Samsung remote name
+    description: Name displayed by the TV in its first remote-authorization prompt.
+  samsung_tls_fingerprint:
+    name: Approved Samsung TLS SHA-256
+    description: Exact 64-hex fingerprint printed and independently verified during initial setup.
+  wol_enabled:
+    name: Enable Wake-on-LAN
+    description: Send a magic packet before commands when the TV may be sleeping.
+  wol_broadcast:
+    name: Wake-on-LAN destination
+    description: Prefer the directed subnet broadcast, for example 192.168.1.255.
+  wol_port:
+    name: Wake-on-LAN UDP port
+    description: Magic-packet destination port; normally 9.
+  pairing_request:
+    name: One-shot pairing request
+    description: Change to any new label and restart to print a fresh temporary iPhone pairing PIN.
+  pairing_window_minutes:
+    name: Pairing window minutes
+    description: How long a requested iPhone enrollment window remains open, from 1 to 30 minutes.
+  reset_identity_request:
+    name: One-shot identity reset
+    description: DANGEROUS. Change to a new value to revoke all phones and replace the emulated Apple TV identity.
+  log_level:
+    name: Log level
+    description: Runtime verbosity. DEBUG can include command details but never pairing secrets or Samsung tokens.
+

@@ -1,0 +1,16 @@
+{
+  "device_name": "HAOS Smoke Test",
+  "companion_port": 49152,
+  "apple_tv_model": "AppleTV14,1",
+  "samsung_host": "127.0.0.1",
+  "samsung_mac": "02:00:00:00:00:01",
+  "samsung_remote_name": "atvr4samsung-smoke",
+  "samsung_tls_fingerprint": "",
+  "wol_enabled": false,
+  "wol_broadcast": "127.0.0.1",
+  "wol_port": 9,
+  "pairing_request": "",
+  "pairing_window_minutes": 5,
+  "reset_identity_request": "",
+  "log_level": "INFO"
+}

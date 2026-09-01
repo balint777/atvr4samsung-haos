@@ -1,0 +1,45 @@
+name: atvr4samsung Companion Bridge
+version: "0.1.0"
+slug: atvr4samsung
+description: >-
+  Emulate an Apple TV Companion endpoint and relay the native iPhone Remote to
+  a Samsung Tizen TV.
+url: https://github.com/vb3/atvr4samsung
+stage: experimental
+startup: services
+boot: auto
+init: false
+host_network: true
+arch:
+  - amd64
+  - aarch64
+options:
+  device_name: Samsung TV
+  companion_port: 49152
+  apple_tv_model: AppleTV14,1
+  samsung_host: ""
+  samsung_mac: ""
+  samsung_remote_name: atvr4samsung
+  samsung_tls_fingerprint: ""
+  wol_enabled: true
+  wol_broadcast: 255.255.255.255
+  wol_port: 9
+  pairing_request: ""
+  pairing_window_minutes: 5
+  reset_identity_request: ""
+  log_level: INFO
+schema:
+  device_name: str
+  companion_port: port
+  apple_tv_model: str
+  samsung_host: str
+  samsung_mac: str
+  samsung_remote_name: str
+  samsung_tls_fingerprint: "str?"
+  wol_enabled: bool
+  wol_broadcast: str
+  wol_port: port
+  pairing_request: "str?"
+  pairing_window_minutes: int
+  reset_identity_request: "str?"
+  log_level: list(DEBUG|INFO|WARNING|ERROR|CRITICAL)
