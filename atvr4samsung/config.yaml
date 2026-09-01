@@ -4,10 +4,9 @@ slug: atvr4samsung
 description: >-
   Emulate an Apple TV Companion endpoint and relay the native iPhone Remote to
   a Samsung Tizen TV.
-url: https://github.com/vb3/atvr4samsung
+url: https://github.com/balint777/atvr4samsung-haos
 stage: experimental
 startup: services
-boot: auto
 init: false
 host_network: true
 arch:
