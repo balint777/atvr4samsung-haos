@@ -37,3 +37,6 @@ jobs:
       - run: >-
           docker run --rm --entrypoint python3 atvr4samsung-haos:test
           /usr/local/libexec/atvr4samsung-verify-watch-compat.py
+      - run: >-
+          docker run --rm --entrypoint python3 atvr4samsung-haos:test
+          /usr/local/libexec/atvr4samsung-verify-watch-input.py

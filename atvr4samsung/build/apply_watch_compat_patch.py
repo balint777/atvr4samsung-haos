@@ -20,8 +20,8 @@ ADAPTIVE_CIPHER_BLOCK = '''_LOGGER = logging.getLogger(__name__)
 class _AdaptiveCompanionCipher:
     """Negotiate the implicit AEAD nonce layout without changing the wire protocol.
 
-    iOS uses a little-endian counter across all 12 nonce bytes, while watchOS uses
-    the HAP layout: four zero bytes followed by an eight-byte little-endian counter.
+    Current iOS and watchOS use a little-endian counter across all 12 nonce bytes.
+    Some HAP-derived clients use four zero bytes followed by an eight-byte counter.
     Counter zero is identical in both layouts, so keep both cipher states in lockstep
     until a later inbound frame authenticates with exactly one layout.
     """
@@ -36,6 +36,7 @@ class _AdaptiveCompanionCipher:
             ),
         }
         self._selected_name: str | None = None
+        self.last_in_counter: int | None = None
 
     def encrypt(self, data: bytes, nonce=None, aad=None) -> bytes:
         if self._selected_name is not None:
@@ -56,12 +57,13 @@ class _AdaptiveCompanionCipher:
 
     def decrypt(self, data: bytes, nonce=None, aad=None) -> bytes:
         if self._selected_name is not None:
-            return self._candidates[self._selected_name].decrypt(
-                data, nonce=nonce, aad=aad
-            )
+            cipher = self._candidates[self._selected_name]
+            self.last_in_counter = cipher._in_counter
+            return cipher.decrypt(data, nonce=nonce, aad=aad)
 
         decrypted = []
         for name, cipher in self._candidates.items():
+            self.last_in_counter = cipher._in_counter
             try:
                 plaintext = cipher.decrypt(data, nonce=nonce, aad=aad)
             except Exception:
@@ -87,6 +89,18 @@ OLD_ENABLE = '''        self.chacha = chacha20.Chacha20Cipher(output_key, input_
 NEW_ENABLE = '''        self.chacha = _AdaptiveCompanionCipher(output_key, input_key)
 '''
 
+OLD_DECRYPT_LOG = '''                _LOGGER.warning("Decrypt failed; closing Companion connection")
+'''
+
+NEW_DECRYPT_LOG = '''                _LOGGER.warning(
+                    "Decrypt failed for %s frame (%d wire bytes, inbound counter %s); "
+                    "closing Companion connection",
+                    frame_type.name,
+                    len(frame_data),
+                    getattr(self.chacha, "last_in_counter", "unknown"),
+                )
+'''
+
 OLD_DISPATCH = '''                _LOGGER.debug("Received %s (%s)", frame_type.name, opack_metadata(unpacked))
                 handler_method_name = f"handle_{unpacked['_i'].lower()}"
                 if hasattr(self, handler_method_name):
@@ -95,8 +109,16 @@ OLD_DISPATCH = '''                _LOGGER.debug("Received %s (%s)", frame_type.n
                     self.send_handler_not_supported(unpacked)
 '''
 
-NEW_DISPATCH = '''                _LOGGER.debug("Received %s (%s)", frame_type.name, opack_metadata(unpacked))
-                identifier = unpacked.get("_i") if isinstance(unpacked, dict) else None
+NEW_DISPATCH = '''                identifier = unpacked.get("_i") if isinstance(unpacked, dict) else None
+                message_type = unpacked.get("_t") if isinstance(unpacked, dict) else None
+                safe_identifier = identifier[:80] if isinstance(identifier, str) else identifier
+                _LOGGER.debug(
+                    "Received %s (%s identifier_value=%r message_type_value=%r)",
+                    frame_type.name,
+                    opack_metadata(unpacked),
+                    safe_identifier,
+                    message_type,
+                )
                 if not isinstance(identifier, str):
                     # Real Companion responses commonly carry only _t=3 and their
                     # transaction ID. A Watch can send one during connection startup;
@@ -122,6 +144,7 @@ def patch_source(source: str) -> str:
     replacements = (
         (LOGGER_BLOCK, ADAPTIVE_CIPHER_BLOCK, "logger insertion point"),
         (OLD_ENABLE, NEW_ENABLE, "encryption setup"),
+        (OLD_DECRYPT_LOG, NEW_DECRYPT_LOG, "decrypt failure log"),
         (OLD_DISPATCH, NEW_DISPATCH, "message dispatch"),
     )
     patched = source

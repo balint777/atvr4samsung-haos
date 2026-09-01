@@ -1,9 +1,17 @@
 # Changelog
 
+## 0.1.4
+
+- Relay the watchOS HID release value (`_hBtS=0`), including release-only
+  Play/Pause events, while retaining the iOS press/release values.
+- Relay legacy `_mcc` Crown volume and media commands to Samsung.
+- Add content-free Companion identifier, frame type, and inbound-counter
+  diagnostics for any remaining watchOS disconnects.
+
 ## 0.1.3
 
 - Added per-connection negotiation for the different implicit ChaCha20-Poly1305
-  nonce layouts used by iOS and watchOS Companion clients.
+  nonce layouts used by Companion clients.
 - Accept identifier-less Companion response frames from Apple Watch without
   counting them as malformed commands.
 
