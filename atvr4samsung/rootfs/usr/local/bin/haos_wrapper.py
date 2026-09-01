@@ -374,6 +374,10 @@ def main() -> int:
         log(f"Unknown wrapper command: {' '.join(sys.argv[1:])}")
         return 2
     try:
+        log(
+            "HAOS app version "
+            f"{os.environ.get('ATVR4SAMSUNG_HAOS_VERSION', 'unknown')}."
+        )
         options = load_options()
         runtime_config, wrapper_config = build_runtime_config(options)
         _reject_symlinks_and_fix_tree(STATE_DIR)

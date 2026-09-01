@@ -17,20 +17,19 @@ OLD_BLOCK = '''        try:
         try:
             content = message.get("_c", {})
             raw_phase = int(content["_tPh"])
+            action = TOUCH_ACTION_NAMES.get(raw_phase)
 '''
 
-NEW_BLOCK = '''        # Current iOS clients can omit `_ns`. The inherited decoder uses that field only for
-        # unused last-touch bookkeeping, while the relay needs `_tPh`, `_cx`, and `_cy`. Do not
-        # count an otherwise usable frame as malformed merely because `_ns` is absent; three such
-        # counts would disconnect the client in the middle of a trackpad gesture.
+NEW_BLOCK = '''        # Do not call the inherited touch decoder here. It only updates unused last-touch
+        # bookkeeping, but requires fields and exact value types that vary between iOS clients.
+        # Counting those otherwise usable frames as malformed disconnects the client after three
+        # trackpad events. The relay below validates and consumes the fields it actually needs.
         content = message.get("_c", {})
         try:
-            if "_ns" in content:
-                super().handle__hidt(message)
-        except Exception:
-            self._malformed_frame("malformed touch message")
-        try:
             raw_phase = int(content["_tPh"])
+            # Captured current iOS Remote traffic uses phase 2 for moving touches. Phase 3 remains
+            # the stationary/hold form accepted by upstream; both advance the same gesture.
+            action = "hold" if raw_phase == 2 else TOUCH_ACTION_NAMES.get(raw_phase)
 '''
 
 

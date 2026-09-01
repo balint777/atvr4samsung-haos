@@ -16,8 +16,9 @@ SPEC.loader.exec_module(PATCH_MODULE)
 class TouchPatchTests(unittest.TestCase):
     def test_patch_accepts_missing_timestamp_without_hiding_relay_fields(self) -> None:
         patched = PATCH_MODULE.patch_source(PATCH_MODULE.OLD_BLOCK)
-        self.assertIn('if "_ns" in content:', patched)
         self.assertIn('raw_phase = int(content["_tPh"])', patched)
+        self.assertIn('action = "hold" if raw_phase == 2', patched)
+        self.assertNotIn("super().handle__hidt(message)", patched)
         self.assertNotIn(PATCH_MODULE.OLD_BLOCK, patched)
 
     def test_patch_rejects_an_unexpected_upstream_layout(self) -> None:

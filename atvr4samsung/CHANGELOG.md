@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+- Added the current iOS movement phase (`_tPh=2`) to the gesture mapping and
+  bypassed upstream's unused last-touch bookkeeping decoder, which rejects that
+  phase and closes the connection after three movements.
+- Added the HAOS app version to every startup log for deployment verification.
+
 ## 0.1.1
 
 - Fixed iPhone trackpad gestures disconnecting after three touch frames when
