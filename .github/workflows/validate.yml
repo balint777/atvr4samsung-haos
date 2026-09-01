@@ -25,3 +25,12 @@ jobs:
       - uses: frenck/action-addon-linter@v2.21
         with:
           path: ./atvr4samsung
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag atvr4samsung-haos:test ./atvr4samsung
+      - run: >-
+          docker run --rm --entrypoint python3 atvr4samsung-haos:test
+          /usr/local/libexec/atvr4samsung-verify-touch-compat.py
