@@ -89,6 +89,19 @@ OLD_ENABLE = '''        self.chacha = chacha20.Chacha20Cipher(output_key, input_
 NEW_ENABLE = '''        self.chacha = _AdaptiveCompanionCipher(output_key, input_key)
 '''
 
+OLD_ENCRYPTED_DISPATCH = '''        if self.chacha and frame_type not in COMPANION_AUTH_FRAMES:
+'''
+
+NEW_ENCRYPTED_DISPATCH = '''        if self.chacha and frame_type is FrameType.NoOp and not frame_data:
+            # Apple Watch sends an empty cleartext NoOp after a short idle period.
+            # It has no AEAD tag and is outside the encrypted message sequence, so
+            # accept it as a keepalive without consuming the inbound nonce counter.
+            _LOGGER.debug("Received cleartext Companion NoOp keepalive")
+            return self.transport is None or not self.transport.is_closing()
+
+        if self.chacha and frame_type not in COMPANION_AUTH_FRAMES:
+'''
+
 OLD_DECRYPT_LOG = '''                _LOGGER.warning("Decrypt failed; closing Companion connection")
 '''
 
@@ -144,6 +157,7 @@ def patch_source(source: str) -> str:
     replacements = (
         (LOGGER_BLOCK, ADAPTIVE_CIPHER_BLOCK, "logger insertion point"),
         (OLD_ENABLE, NEW_ENABLE, "encryption setup"),
+        (OLD_ENCRYPTED_DISPATCH, NEW_ENCRYPTED_DISPATCH, "encrypted dispatch"),
         (OLD_DECRYPT_LOG, NEW_DECRYPT_LOG, "decrypt failure log"),
         (OLD_DISPATCH, NEW_DISPATCH, "message dispatch"),
     )

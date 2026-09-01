@@ -18,6 +18,7 @@ class WatchPatchTests(unittest.TestCase):
         source = (
             PATCH_MODULE.LOGGER_BLOCK
             + PATCH_MODULE.OLD_ENABLE
+            + PATCH_MODULE.OLD_ENCRYPTED_DISPATCH
             + PATCH_MODULE.OLD_DECRYPT_LOG
             + PATCH_MODULE.OLD_DISPATCH
         )
@@ -26,6 +27,7 @@ class WatchPatchTests(unittest.TestCase):
         self.assertIn("Chacha20Cipher8byteNonce", patched)
         self.assertIn("inbound counter", patched)
         self.assertIn("identifier_value=%r", patched)
+        self.assertIn("Received cleartext Companion NoOp keepalive", patched)
         self.assertIn("unpacked.get(\"_t\") == 3", patched)
         self.assertNotIn(PATCH_MODULE.OLD_ENABLE, patched)
         self.assertNotIn(PATCH_MODULE.OLD_DISPATCH, patched)

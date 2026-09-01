@@ -89,4 +89,18 @@ assert service._handle_frame(header, client.encrypt(response, aad=header))
 assert service._malformed_frames == 0
 assert not transport.closing
 
+# watchOS sends an empty, cleartext NoOp after a short idle period. It must not
+# enter AEAD decryption or consume an implicit counter. Prove the next encrypted
+# response still authenticates at counter one.
+noop_header = bytes([FrameType.NoOp.value, 0, 0, 0])
+assert service._handle_frame(noop_header, b"")
+second_response = opack.pack({"_t": 3, "_x": 1235, "_rT": 0, "_c": {}})
+second_header = bytes([FrameType.E_OPACK.value]) + (len(second_response) + 16).to_bytes(3, "big")
+assert service._handle_frame(
+    second_header, client.encrypt(second_response, aad=second_header)
+)
+assert service.chacha._selected_name == "watchOS/HAP 8-byte"
+assert service._malformed_frames == 0
+assert not transport.closing
+
 print("iOS/watchOS Companion nonce compatibility checks passed")

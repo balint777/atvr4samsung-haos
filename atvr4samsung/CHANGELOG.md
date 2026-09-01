@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Accept the Apple Watch's empty cleartext `NoOp` idle keepalive without
+  attempting AEAD decryption or consuming the inbound nonce counter.
+
 ## 0.1.4
 
 - Relay the watchOS HID release value (`_hBtS=0`), including release-only
