@@ -11,13 +11,10 @@ The app image derives from the following immutable upstream release:
 Those values come from upstream's release metadata asset
 `atvr4samsung-2.0.1-release.env`. Upstream publishes that metadata and the
 deployment bundle with GitHub artifact attestations. The wrapper adds its HAOS
-lifecycle process and configuration translation on top of that image. Version
-0.1.2 also applies one audited compatibility patch: it bypasses upstream's
-unused last-touch bookkeeping decoder, maps the captured current-iOS movement
-phase (`_tPh=2`), and validates only the touch fields used by the relay. This
-tolerates optional fields and differing scalar representations without
-weakening Companion framing or authorization. The build verifies upstream
-`companion/server.py` against
-SHA-256
-`8e6f4bc55a8123a0bdf82e56dc3bd082ffb31f217dd0fce390c7e7098bfbcc4f`
-before changing that handler, and fails closed if the source differs.
+lifecycle process and configuration translation on top of that image. Releases
+0.1.2 through 0.1.6 also apply narrow compatibility patches for current-iOS
+touch frames, Apple Watch encryption and input variants, the Watch idle
+keepalive, and the iOS 27 Top Shelf startup request. Each build patch verifies
+the exact input source against a pinned SHA-256 digest and fails closed if the
+installed upstream source differs. Container-level regression checks run
+immediately after every patch.

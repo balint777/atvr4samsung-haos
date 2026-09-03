@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+- Acknowledge the `FetchCurrentTopShelfItemsEvent` request added to the iOS 27
+  TV Remote session startup, returning an empty successful result instead of an
+  unsupported-handler error.
+
 ## 0.1.5
 
 - Accept the Apple Watch's empty cleartext `NoOp` idle keepalive without
