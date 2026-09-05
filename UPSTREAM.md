@@ -12,7 +12,7 @@ Those values come from upstream's release metadata asset
 `atvr4samsung-2.2.0-release.env`. Upstream publishes that metadata and the
 deployment bundle with GitHub artifact attestations. The wrapper adds its HAOS
 lifecycle process and configuration translation on top of that image. Releases
-0.1.2 through 0.5.0 also apply narrow compatibility patches for current-iOS
+0.1.2 through 0.6.0 also apply narrow compatibility patches for current-iOS
 touch frames, Apple Watch encryption and input variants, the Watch idle
 keepalive, and the iOS 27 Top Shelf startup request. Each build patch verifies
 the exact input source against a pinned SHA-256 digest and fails closed if the

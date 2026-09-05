@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- Add an opt-in, standalone HomeKit Television accessory backed by a Home
+  Assistant `media_player` entity.
+- Keep the accessory intentionally power-only and omit `RemoteKey`, target
+  control and speaker services so the existing Companion endpoint remains the
+  sole native Apple TV Remote target.
+- Publish the separate Apple Home setup code as a Home Assistant notification,
+  dismiss it after pairing, and retain the HomeKit identity across restarts.
+- Supervise the optional HomeKit process alongside the Companion bridge and
+  provide a separate one-shot identity reset.
+
 ## 0.5.0
 
 - Close an automatically opened pairing window after its first successful

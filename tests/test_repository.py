@@ -55,6 +55,7 @@ class RepositoryMetadataTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertNotIn(":latest", dockerfile)
         self.assertIn('haos_wrapper.py", "healthcheck"', dockerfile)
+        self.assertIn("atvr4samsung-verify-homekit-tv.py", dockerfile)
         self.assertIn(
             f"ENV ATVR4SAMSUNG_HAOS_VERSION={metadata['version']}",
             dockerfile,

@@ -37,6 +37,8 @@ The wrapper is intentionally thin. It:
 - closes an on-demand window after the first successful enrollment and removes
   the notification on completion or expiry;
 - retains a Home Assistant input action for manually opening pairing;
+- optionally advertises a separate, power-only HomeKit Television backed by an
+  existing Home Assistant `media_player`, without HomeKit remote keys;
 - retains one-shot request fields for pairing and Apple-side identity resets.
 
 The upstream project currently describes Samsung Frame TVs as its tested

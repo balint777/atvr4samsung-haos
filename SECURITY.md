@@ -3,13 +3,17 @@
 - The app uses host networking because Apple Companion discovery requires mDNS
   multicast and TV wake-up requires Wake-on-LAN. It therefore has less network
   isolation than a normal HAOS app.
-- Home Assistant Core API access is used only to create and dismiss the pairing-PIN
-  notification. The app has no Supervisor management API permission,
-  privileged capability, Docker socket, or Home Assistant configuration mount.
+- Home Assistant Core API access creates and dismisses pairing notifications.
+  When the optional minimal HomeKit Television is enabled, it also reads one
+  explicitly configured `media_player` state and calls only its standard
+  `turn_on` and `turn_off` services. The app has no Supervisor management API
+  permission, privileged capability, Docker socket, or Home Assistant
+  configuration mount.
 - The bridge process drops from root to UID/GID 65532 before it contacts the TV
   or accepts iPhone connections.
-- Persistent identity, phone pairings, Samsung access token, and Samsung TLS
-  certificate pin are stored under the app's private `/data/state` directory.
+- Persistent Companion and optional HomeKit identities, pairing records,
+  Samsung access token, and Samsung TLS certificate pin are stored under the
+  app's private `/data/state` directory.
 - The Samsung WebSocket uses TLS port 8002 and starts only after the operator
   approves the exact live certificate SHA-256 fingerprint.
 - With `pair_on_demand` enabled, an admitted LAN Pair-Setup request opens one

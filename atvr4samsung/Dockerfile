@@ -4,7 +4,7 @@ FROM ghcr.io/balint777/atvr4samsung@sha256:4805adf802ae2cab92e16dee36df7eb6adf4c
 
 USER root
 
-ENV ATVR4SAMSUNG_HAOS_VERSION=0.5.0
+ENV ATVR4SAMSUNG_HAOS_VERSION=0.6.0
 
 COPY build/apply_touch_compat_patch.py /usr/local/libexec/atvr4samsung-apply-touch-compat-patch.py
 COPY build/verify_touch_compat.py /usr/local/libexec/atvr4samsung-verify-touch-compat.py
@@ -26,8 +26,16 @@ COPY build/verify_ios27_topshelf.py /usr/local/libexec/atvr4samsung-verify-ios27
 RUN python3 /usr/local/libexec/atvr4samsung-apply-ios27-topshelf-patch.py
 RUN python3 /usr/local/libexec/atvr4samsung-verify-ios27-topshelf.py
 
+COPY build/homekit-requirements.txt /tmp/homekit-requirements.txt
+RUN python3 -m pip install --no-cache-dir --no-deps --require-hashes \
+        -r /tmp/homekit-requirements.txt \
+    && python3 -c "from pyhap.accessory_driver import AccessoryDriver"
+
 COPY rootfs/usr/local/bin/haos_wrapper.py /usr/local/bin/haos_wrapper.py
-RUN chmod 0755 /usr/local/bin/haos_wrapper.py
+COPY rootfs/usr/local/bin/homekit_tv.py /usr/local/bin/homekit_tv.py
+COPY build/verify_homekit_tv.py /usr/local/libexec/atvr4samsung-verify-homekit-tv.py
+RUN chmod 0755 /usr/local/bin/haos_wrapper.py /usr/local/bin/homekit_tv.py
+RUN python3 /usr/local/libexec/atvr4samsung-verify-homekit-tv.py
 
 ENTRYPOINT ["python3", "/usr/local/bin/haos_wrapper.py"]
 CMD []

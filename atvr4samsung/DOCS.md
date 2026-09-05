@@ -16,9 +16,10 @@ in this path.
 - Turn the television on for initial TLS trust and Samsung remote approval.
 
 The app uses host networking for mDNS and Wake-on-LAN. It requests the Home
-Assistant Core API only to create and dismiss pairing notifications. It does not request
-the Docker socket, privileged capabilities, the Supervisor management API, or
-access to Home Assistant's configuration.
+Assistant Core API to manage pairing notifications. If the optional minimal
+HomeKit TV is enabled, it also reads and changes the configured `media_player`'s
+power state. It does not request the Docker socket, privileged capabilities, the
+Supervisor management API, or access to Home Assistant's configuration.
 
 ## 2. Enter the base configuration
 
@@ -108,13 +109,54 @@ On the first actual command, Samsung should display an **Allow remote device**
 prompt for `samsung_remote_name`. Approve it with the physical remote. The
 resulting token persists in the app's private data.
 
-## 5. Reset all Apple-side pairing
+## 5. Optional: add a power-only TV to Apple Home
+
+This is an experimental workaround for installations where Home Assistant's
+normal HomeKit Television creates an unwanted second target in Control Center's
+Apple TV Remote. The add-on's minimal accessory identifies itself to Apple Home
+as a television but deliberately omits HomeKit remote keys, target control,
+speaker control and inputs. Companion Link remains the only full remote target.
+
+Before enabling it, exclude the Samsung TV from any existing Home Assistant
+HomeKit Bridge. Otherwise that bridge will continue advertising its own full
+television and the duplicate Remote target will remain.
+
+Then set:
+
+- `homekit_tv_enabled`: `true`
+- `homekit_tv_entity_id`: the existing Home Assistant entity, for example
+  `media_player.living_room_tv`
+- `homekit_tv_port`: leave `21064` unless that host port is already in use
+
+Save and restart the add-on. A Home Assistant notification provides the Apple
+Home setup code and exact steps. In the iPhone Home app, choose **+ → Add
+Accessory → More Options**, select the configured TV name, and enter that code.
+The notification remains available while the unpaired accessory is available
+and disappears within a few seconds after successful pairing.
+
+The Apple Home tile shows power state and sends `media_player.turn_on` or
+`media_player.turn_off` through Home Assistant. The iPhone and Apple Watch Remote
+continue to control the TV through the direct Companion bridge. This keeps the
+remote path independent of Home Assistant; only the optional Apple Home tile
+depends on the Home Assistant Core API.
+
+Apple does not document how the Remote target picker filters third-party
+television accessories. Verify on the intended iOS version that this minimal TV
+appears in Apple Home but does not add another Remote target. If it still creates
+a duplicate, disable `homekit_tv_enabled`; the Companion bridge is unaffected.
+
+If Apple Home retains a broken copy of this optional accessory, remove it from
+the Home app, put a new unique value in `homekit_tv_reset_request`, and restart
+the add-on. This revokes only the minimal HomeKit TV identity; it does not revoke
+phones paired with Companion Link.
+
+## 6. Reset all Companion pairing
 
 If the iPhone retains a broken pairing or you need to revoke every paired
 phone, put a new unique value in `reset_identity_request` and restart the app.
-This deletes the emulated Apple TV identity and all paired-phone authorization,
-but preserves the Samsung token and TLS pin. The operation is one-shot per
-unique request value.
+This deletes the emulated Companion identity and all paired-phone authorization,
+but preserves the optional HomeKit TV identity, Samsung token and TLS pin. The
+operation is one-shot per unique request value.
 
 Afterwards, change `pairing_request` to a new value and pair again. Every
 previously paired phone must pair with the replacement identity.
@@ -156,6 +198,7 @@ and restart once more.
 ## Persistent data and backups
 
 HAOS app backups include `/data`. This contains the generated runtime config,
-the emulated Apple TV identity, paired-phone public authorization, Samsung
-token, TLS certificate pin, and one-shot request markers. Treat backups as
-sensitive and restore all of this state together.
+the emulated Companion identity, paired-phone public authorization, optional
+HomeKit identity and setup code, Samsung token, TLS certificate pin, and
+one-shot request markers. Treat backups as sensitive and restore all of this
+state together.

@@ -16,6 +16,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install PyYAML
+      - run: >-
+          python -m pip install --no-deps --require-hashes
+          -r atvr4samsung/build/homekit-requirements.txt
       - run: python -m unittest discover -s tests -v
 
   addon-lint:
@@ -40,3 +43,6 @@ jobs:
       - run: >-
           docker run --rm --entrypoint python3 atvr4samsung-haos:test
           /usr/local/libexec/atvr4samsung-verify-watch-input.py
+      - run: >-
+          docker run --rm --entrypoint python3 atvr4samsung-haos:test
+          /usr/local/libexec/atvr4samsung-verify-homekit-tv.py

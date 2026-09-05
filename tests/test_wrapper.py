@@ -38,6 +38,10 @@ def valid_options() -> dict:
         "pairing_window_minutes": 5,
         "automatic_first_pairing": True,
         "pair_on_demand": True,
+        "homekit_tv_enabled": False,
+        "homekit_tv_entity_id": "",
+        "homekit_tv_port": 21064,
+        "homekit_tv_reset_request": "",
         "reset_identity_request": "",
         "log_level": "INFO",
     }
@@ -55,6 +59,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(wrapper["automatic_first_pairing"])
         self.assertTrue(runtime["companion"]["pair_on_demand"])
         self.assertEqual(runtime["companion"]["pairing_window_seconds"], 300)
+        self.assertFalse(wrapper["homekit_tv_enabled"])
+        self.assertEqual(wrapper["homekit_tv_port"], 21064)
 
     def test_rejects_missing_tv_address(self) -> None:
         options = valid_options()
@@ -75,6 +81,40 @@ class ConfigurationTests(unittest.TestCase):
         options["pairing_window_minutes"] = 31
 
         with self.assertRaisesRegex(WRAPPER.ConfigurationError, "between 1 and 30"):
+            WRAPPER.build_runtime_config(options)
+
+    def test_builds_opt_in_homekit_configuration(self) -> None:
+        options = valid_options()
+        options["homekit_tv_enabled"] = True
+        options["homekit_tv_entity_id"] = "media_player.living_room_tv"
+        options["homekit_tv_port"] = 21065
+
+        _, wrapper = WRAPPER.build_runtime_config(options)
+
+        self.assertTrue(wrapper["homekit_tv_enabled"])
+        self.assertEqual(
+            wrapper["homekit_tv_entity_id"], "media_player.living_room_tv"
+        )
+        self.assertEqual(wrapper["homekit_tv_name"], "Living Room TV")
+
+    def test_enabled_homekit_requires_media_player(self) -> None:
+        options = valid_options()
+        options["homekit_tv_enabled"] = True
+
+        with self.assertRaisesRegex(WRAPPER.ConfigurationError, "is required"):
+            WRAPPER.build_runtime_config(options)
+
+    def test_rejects_invalid_homekit_entity_or_conflicting_port(self) -> None:
+        options = valid_options()
+        options["homekit_tv_entity_id"] = "switch.tv"
+        with self.assertRaisesRegex(WRAPPER.ConfigurationError, "must look like"):
+            WRAPPER.build_runtime_config(options)
+
+        options = valid_options()
+        options["homekit_tv_enabled"] = True
+        options["homekit_tv_entity_id"] = "media_player.tv"
+        options["homekit_tv_port"] = options["companion_port"]
+        with self.assertRaisesRegex(WRAPPER.ConfigurationError, "must differ"):
             WRAPPER.build_runtime_config(options)
 
 
@@ -267,6 +307,42 @@ class PairingInputTests(unittest.TestCase):
             WRAPPER.json.loads(request.data),
             {"notification_id": WRAPPER.PAIRING_NOTIFICATION_ID},
         )
+
+
+class HomeKitLifecycleTests(unittest.TestCase):
+    def test_homekit_command_contains_only_non_secret_configuration(self) -> None:
+        options = valid_options()
+        options["homekit_tv_enabled"] = True
+        options["homekit_tv_entity_id"] = "media_player.living_room_tv"
+        _, wrapper = WRAPPER.build_runtime_config(options)
+        process = MagicMock()
+
+        with patch.object(WRAPPER.subprocess, "Popen", return_value=process) as opened:
+            self.assertIs(WRAPPER.start_homekit_tv(wrapper), process)
+
+        command = opened.call_args.args[0]
+        self.assertIn("/usr/local/bin/homekit_tv.py", command)
+        self.assertIn("media_player.living_room_tv", command)
+        self.assertNotIn("SUPERVISOR_TOKEN", " ".join(command))
+
+    def test_homekit_reset_removes_only_its_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            paths = [state / "homekit.state", state / "homekit.pin", state / "ready"]
+            marker = state / "marker"
+            for path in paths:
+                path.write_text("private", encoding="utf-8")
+            with (
+                patch.object(WRAPPER, "HOMEKIT_STATE_PATH", paths[0]),
+                patch.object(WRAPPER, "HOMEKIT_PIN_PATH", paths[1]),
+                patch.object(WRAPPER, "HOMEKIT_READY_PATH", paths[2]),
+                patch.object(WRAPPER, "HOMEKIT_RESET_MARKER", marker),
+            ):
+                WRAPPER.prepare_homekit_identity("reset-1")
+                WRAPPER.prepare_homekit_identity("reset-1")
+
+            self.assertTrue(marker.is_file())
+            self.assertTrue(all(not path.exists() for path in paths))
 
 
 if __name__ == "__main__":

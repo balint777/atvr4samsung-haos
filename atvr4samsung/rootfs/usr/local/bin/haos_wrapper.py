@@ -29,15 +29,22 @@ CONFIG_PATH = DATA_DIR / "atvr4samsung.yaml"
 TLS_PIN_PATH = STATE_DIR / "samsung-tls-cert.pem"
 PAIRING_MARKER = STATE_DIR / ".haos-pairing-request"
 RESET_MARKER = STATE_DIR / ".haos-reset-identity-request"
+HOMEKIT_RESET_MARKER = STATE_DIR / ".haos-homekit-reset-request"
+HOMEKIT_STATE_PATH = STATE_DIR / "homekit-tv.state"
+HOMEKIT_PIN_PATH = STATE_DIR / "homekit-tv.pincode"
+HOMEKIT_READY_PATH = STATE_DIR / ".homekit-tv-ready"
+HOMEKIT_TV_COMMAND = "/usr/local/bin/homekit_tv.py"
 SERVICE_UID = 65532
 SERVICE_GID = 65532
 UPSTREAM_COMMAND = "atvr4samsung"
 MAC_PATTERN = re.compile(r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
 HEX_64_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+MEDIA_PLAYER_PATTERN = re.compile(r"^media_player\.[a-z0-9_]+$")
 LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 PAIRING_PIN_PATTERN = re.compile(r"^Pairing PIN: ([0-9]{4})$", re.MULTILINE)
 PAIRING_EXPIRY_PATTERN = re.compile(r"^Enrollment is open until (.+)\.$", re.MULTILINE)
 PAIRING_NOTIFICATION_ID = "atvr4samsung_pairing"
+HOMEKIT_PAIRING_NOTIFICATION_ID = "atvr4samsung_homekit_tv_pairing"
 PAIRING_LOCK = threading.Lock()
 PAIRING_WINDOW_PATH = STATE_DIR / "pairing-window.json"
 PAIRING_NOTIFICATION_LOCK = threading.Lock()
@@ -136,6 +143,34 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
     pair_on_demand = options.get("pair_on_demand", True)
     if not isinstance(pair_on_demand, bool):
         raise ConfigurationError("pair_on_demand must be true or false")
+    homekit_tv_enabled = options.get("homekit_tv_enabled", False)
+    if not isinstance(homekit_tv_enabled, bool):
+        raise ConfigurationError("homekit_tv_enabled must be true or false")
+    homekit_tv_entity_id = _clean_string(
+        options.get("homekit_tv_entity_id", ""),
+        "homekit_tv_entity_id",
+        allow_empty=True,
+        maximum=128,
+    ).lower()
+    if homekit_tv_entity_id and not MEDIA_PLAYER_PATTERN.fullmatch(homekit_tv_entity_id):
+        raise ConfigurationError(
+            "homekit_tv_entity_id must look like media_player.living_room_tv"
+        )
+    if homekit_tv_enabled and not homekit_tv_entity_id:
+        raise ConfigurationError(
+            "homekit_tv_entity_id is required when homekit_tv_enabled is true"
+        )
+    homekit_tv_port = _integer(
+        options.get("homekit_tv_port", 21064), "homekit_tv_port", 1, 65535
+    )
+    if homekit_tv_enabled and homekit_tv_port == companion_port:
+        raise ConfigurationError("homekit_tv_port must differ from companion_port")
+    homekit_tv_reset_request = _clean_string(
+        options.get("homekit_tv_reset_request", ""),
+        "homekit_tv_reset_request",
+        allow_empty=True,
+        maximum=128,
+    )
     log_level = _clean_string(options.get("log_level", "INFO"), "log_level").upper()
     if log_level not in LOG_LEVELS:
         raise ConfigurationError(f"log_level must be one of {', '.join(sorted(LOG_LEVELS))}")
@@ -170,6 +205,11 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
         "automatic_first_pairing": automatic_first_pairing,
         "pair_on_demand": pair_on_demand,
         "reset_request": reset_request,
+        "homekit_tv_enabled": homekit_tv_enabled,
+        "homekit_tv_entity_id": homekit_tv_entity_id,
+        "homekit_tv_port": homekit_tv_port,
+        "homekit_tv_name": device_name,
+        "homekit_tv_reset_request": homekit_tv_reset_request,
     }
     return runtime_config, wrapper_config
 
@@ -362,13 +402,13 @@ def publish_pairing_notification(pin: str, expiry: str) -> bool:
     return True
 
 
-def dismiss_pairing_notification() -> bool:
-    """Remove pairing details once their window is no longer usable."""
+def dismiss_notification(notification_id: str, description: str) -> bool:
+    """Remove one app-owned persistent notification."""
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     if not token:
-        log("Home Assistant API token is unavailable; a stale pairing notification may remain.")
+        log(f"Home Assistant API token is unavailable; {description} may remain.")
         return False
-    payload = json.dumps({"notification_id": PAIRING_NOTIFICATION_ID}).encode("utf-8")
+    payload = json.dumps({"notification_id": notification_id}).encode("utf-8")
     notification = urllib_request.Request(
         "http://supervisor/core/api/services/persistent_notification/dismiss",
         data=payload,
@@ -383,10 +423,26 @@ def dismiss_pairing_notification() -> bool:
             if not 200 <= response.status < 300:
                 raise RuntimeError(f"Home Assistant returned HTTP {response.status}")
     except (OSError, RuntimeError, urllib_error.URLError) as exc:
-        log(f"Could not dismiss the Home Assistant pairing notification: {type(exc).__name__}.")
+        log(f"Could not dismiss {description}: {type(exc).__name__}.")
         return False
-    log("Dismissed the expired or completed Home Assistant pairing notification.")
+    log(f"Dismissed {description}.")
     return True
+
+
+def dismiss_pairing_notification() -> bool:
+    """Remove Companion pairing details once their window is no longer usable."""
+    return dismiss_notification(
+        PAIRING_NOTIFICATION_ID,
+        "the expired or completed iPhone pairing notification",
+    )
+
+
+def dismiss_homekit_pairing_notification() -> bool:
+    """Remove an obsolete Apple Home setup code while the facade is disabled."""
+    return dismiss_notification(
+        HOMEKIT_PAIRING_NOTIFICATION_ID,
+        "the Apple Home setup-code notification",
+    )
 
 
 def read_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> dict[str, Any] | None:
@@ -479,6 +535,74 @@ def listen_for_input(minutes: int) -> None:
             handle_input_line(line, minutes)
 
 
+def prepare_homekit_identity(reset_request: str) -> None:
+    """Apply an explicit one-shot reset to the separate HomeKit identity."""
+    if not request_is_new(HOMEKIT_RESET_MARKER, reset_request):
+        return
+    log("Processing one-shot HomeKit TV identity reset; Apple Home pairing will be revoked.")
+    for path in (HOMEKIT_STATE_PATH, HOMEKIT_PIN_PATH, HOMEKIT_READY_PATH):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    mark_request(HOMEKIT_RESET_MARKER, reset_request)
+
+
+def start_homekit_tv(wrapper_config: Mapping[str, Any]) -> subprocess.Popen[Any]:
+    """Start the optional minimal HomeKit Television process."""
+    try:
+        HOMEKIT_READY_PATH.unlink()
+    except FileNotFoundError:
+        pass
+    return subprocess.Popen(
+        [
+            sys.executable,
+            HOMEKIT_TV_COMMAND,
+            "--name",
+            str(wrapper_config["homekit_tv_name"]),
+            "--entity-id",
+            str(wrapper_config["homekit_tv_entity_id"]),
+            "--port",
+            str(wrapper_config["homekit_tv_port"]),
+            "--persist-file",
+            str(HOMEKIT_STATE_PATH),
+            "--pincode-file",
+            str(HOMEKIT_PIN_PATH),
+            "--ready-file",
+            str(HOMEKIT_READY_PATH),
+        ],
+        start_new_session=False,
+    )
+
+
+def wait_for_homekit_tv(daemon: subprocess.Popen[Any], timeout: float = 20.0) -> None:
+    """Wait for the HomeKit server and mDNS advertisement to be ready."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        return_code = daemon.poll()
+        if return_code is not None:
+            raise RuntimeError(
+                f"minimal HomeKit Television exited during startup with status {return_code}"
+            )
+        if HOMEKIT_READY_PATH.is_file():
+            return
+        time.sleep(0.25)
+    raise RuntimeError("minimal HomeKit Television did not become healthy within 20 seconds")
+
+
+def stop_process(daemon: subprocess.Popen[Any], description: str) -> None:
+    """Stop a managed child without leaving it behind after wrapper failure."""
+    if daemon.poll() is not None:
+        return
+    daemon.terminate()
+    try:
+        daemon.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        log(f"{description} did not stop gracefully; killing it.")
+        daemon.kill()
+        daemon.wait(timeout=5)
+
+
 def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
     reset_request = str(wrapper_config["reset_request"])
     if request_is_new(RESET_MARKER, reset_request):
@@ -488,10 +612,12 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
             raise RuntimeError("identity reset failed; request was not marked as processed")
         mark_request(RESET_MARKER, reset_request)
 
-    daemon = subprocess.Popen(
+    companion_daemon = subprocess.Popen(
         [UPSTREAM_COMMAND, "--config", str(CONFIG_PATH), "run"],
         start_new_session=False,
     )
+    homekit_daemon: subprocess.Popen[Any] | None = None
+    pairing_watch_stop: threading.Event | None = None
 
     stopping = False
 
@@ -500,15 +626,17 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
         if stopping:
             return
         stopping = True
-        log(f"Forwarding signal {signum} to the bridge.")
-        if daemon.poll() is None:
-            daemon.send_signal(signum)
+        log(f"Forwarding signal {signum} to the managed services.")
+        if companion_daemon.poll() is None:
+            companion_daemon.send_signal(signum)
+        if homekit_daemon is not None and homekit_daemon.poll() is None:
+            homekit_daemon.send_signal(signum)
 
     signal.signal(signal.SIGTERM, stop_daemon)
     signal.signal(signal.SIGINT, stop_daemon)
 
     try:
-        wait_for_bridge(daemon)
+        wait_for_bridge(companion_daemon)
         log("Companion bridge is healthy and advertising on the LAN.")
 
         pairing_request = str(wrapper_config["pairing_request"])
@@ -523,6 +651,17 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
             )
         elif pairing_request:
             log("The configured pairing_request was already processed; pairing remains closed.")
+
+        if bool(wrapper_config["homekit_tv_enabled"]):
+            prepare_homekit_identity(str(wrapper_config["homekit_tv_reset_request"]))
+            homekit_daemon = start_homekit_tv(wrapper_config)
+            wait_for_homekit_tv(homekit_daemon)
+            log(
+                "Minimal HomeKit Television is enabled without Apple Remote controls."
+            )
+        else:
+            dismiss_homekit_pairing_notification()
+            log("Minimal HomeKit Television is disabled.")
 
         input_thread = threading.Thread(
             target=listen_for_input,
@@ -542,19 +681,24 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
         )
         pairing_watch_thread.start()
 
-        try:
-            return daemon.wait()
-        finally:
+        while True:
+            companion_return_code = companion_daemon.poll()
+            if companion_return_code is not None:
+                return companion_return_code
+            if homekit_daemon is not None:
+                homekit_return_code = homekit_daemon.poll()
+                if homekit_return_code is not None and not stopping:
+                    raise RuntimeError(
+                        "minimal HomeKit Television stopped unexpectedly with status "
+                        f"{homekit_return_code}"
+                    )
+            time.sleep(0.25)
+    finally:
+        if pairing_watch_stop is not None:
             pairing_watch_stop.set()
-    except BaseException:
-        if daemon.poll() is None:
-            daemon.terminate()
-            try:
-                daemon.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                daemon.kill()
-                daemon.wait(timeout=5)
-        raise
+        if homekit_daemon is not None:
+            stop_process(homekit_daemon, "Minimal HomeKit Television")
+        stop_process(companion_daemon, "Companion bridge")
 
 
 def load_options(path: Path = OPTIONS_PATH) -> dict[str, Any]:

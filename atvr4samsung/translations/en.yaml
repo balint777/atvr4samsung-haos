@@ -41,6 +41,18 @@ configuration:
   pair_on_demand:
     name: Pair when an iPhone connects
     description: Show a pairing-code notification automatically when an unpaired iPhone selects this remote.
+  homekit_tv_enabled:
+    name: Add a minimal TV to Apple Home
+    description: Experimental. Advertise a separate power-only HomeKit Television without Apple Remote controls.
+  homekit_tv_entity_id:
+    name: Home Assistant TV entity
+    description: Existing media_player entity whose power state the minimal Apple Home television controls.
+  homekit_tv_port:
+    name: HomeKit TV TCP port
+    description: Fixed host-network port for the optional Apple Home accessory; it must differ from the Companion port.
+  homekit_tv_reset_request:
+    name: One-shot HomeKit TV reset
+    description: DANGEROUS. Change to a new value to revoke Apple Home and replace only the minimal television identity.
   reset_identity_request:
     name: One-shot identity reset
     description: DANGEROUS. Change to a new value to revoke all phones and replace the emulated Apple TV identity.
