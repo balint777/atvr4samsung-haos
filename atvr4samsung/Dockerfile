@@ -4,7 +4,7 @@ FROM ghcr.io/vb3/atvr4samsung@sha256:169d7766eaa0eb4de69cbd90d1aff65554bac782d1a
 
 USER root
 
-ENV ATVR4SAMSUNG_HAOS_VERSION=0.2.0
+ENV ATVR4SAMSUNG_HAOS_VERSION=0.3.0
 
 COPY build/apply_touch_compat_patch.py /usr/local/libexec/atvr4samsung-apply-touch-compat-patch.py
 COPY build/verify_touch_compat.py /usr/local/libexec/atvr4samsung-verify-touch-compat.py

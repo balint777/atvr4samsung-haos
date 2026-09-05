@@ -1,5 +1,5 @@
 name: atvr4samsung Companion Bridge
-version: "0.2.0"
+version: "0.3.0"
 slug: atvr4samsung
 description: >-
   Emulate an Apple TV Companion endpoint and relay the native iPhone and Apple
@@ -9,6 +9,8 @@ stage: experimental
 startup: services
 init: false
 host_network: true
+homeassistant_api: true
+stdin: true
 arch:
   - amd64
   - aarch64

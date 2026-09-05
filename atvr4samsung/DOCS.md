@@ -15,9 +15,10 @@ in this path.
   VLANs and allow the configured Companion TCP port.
 - Turn the television on for initial TLS trust and Samsung remote approval.
 
-The app uses host networking for mDNS and Wake-on-LAN. It does not request the
-Docker socket, privileged capabilities, the Supervisor API, or access to Home
-Assistant's configuration.
+The app uses host networking for mDNS and Wake-on-LAN. It requests the Home
+Assistant Core API only to create pairing notifications. It does not request
+the Docker socket, privileged capabilities, the Supervisor management API, or
+access to Home Assistant's configuration.
 
 ## 2. Enter the base configuration
 
@@ -83,6 +84,19 @@ an explicitly requested window.
 
 Disable `automatic_first_pairing` if first-time enrollment must always require
 an explicit `pairing_request`.
+
+### Pair another iPhone without restarting
+
+Run the Home Assistant action `hassio.addon_stdin`, select this app, and use
+the following input:
+
+```json
+{"command":"pair"}
+```
+
+The app opens a fresh window and creates a persistent Home Assistant
+notification containing the PIN and expiry. The same information remains in
+the app log as a fallback. This action can also be placed on a dashboard button.
 
 On the first actual command, Samsung should display an **Allow remote device**
 prompt for `samsung_remote_name`. Approve it with the physical remote. The

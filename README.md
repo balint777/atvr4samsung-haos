@@ -20,7 +20,8 @@ For a local test, copy the `atvr4samsung/` directory to `/addons/atvr4samsung`
 on HAOS and reload the app store.
 
 Read the app's **Documentation** tab before starting it. Initial setup requires
-an explicit Samsung TLS-certificate fingerprint and a one-shot pairing request.
+an explicit Samsung TLS-certificate fingerprint; first-phone pairing then opens
+automatically and publishes its temporary PIN in Home Assistant.
 
 ## Scope
 
@@ -30,8 +31,9 @@ The wrapper is intentionally thin. It:
 - translates Supervisor options into the upstream YAML configuration;
 - keeps identity, phone pairings, the Samsung token, and TLS pin in app data;
 - runs the bridge as unprivileged UID/GID 65532;
-- exposes one-shot request fields for opening an iPhone pairing window or
-  resetting the emulated Apple TV identity.
+- accepts a Home Assistant input action for pairing additional phones and
+  publishes the temporary PIN as a notification;
+- retains one-shot request fields for pairing and Apple-side identity resets.
 
 The upstream project currently describes Samsung Frame TVs as its tested
 target. Other modern Tizen TVs may work through the same WebSocket API but are

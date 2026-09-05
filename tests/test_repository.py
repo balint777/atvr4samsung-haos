@@ -20,6 +20,8 @@ class RepositoryMetadataTests(unittest.TestCase):
         metadata = yaml.safe_load((ADDON / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(metadata["slug"], "atvr4samsung")
         self.assertTrue(metadata["host_network"])
+        self.assertTrue(metadata["homeassistant_api"])
+        self.assertTrue(metadata["stdin"])
         self.assertEqual(set(metadata["arch"]), {"amd64", "aarch64"})
         self.assertEqual(set(metadata["options"]), set(metadata["schema"]))
         for required in ("Dockerfile", "README.md", "DOCS.md", "CHANGELOG.md"):

@@ -12,8 +12,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Mapping
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 import yaml
 
@@ -31,6 +34,10 @@ UPSTREAM_COMMAND = "atvr4samsung"
 MAC_PATTERN = re.compile(r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$")
 HEX_64_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+PAIRING_PIN_PATTERN = re.compile(r"^Pairing PIN: ([0-9]{4})$", re.MULTILINE)
+PAIRING_EXPIRY_PATTERN = re.compile(r"^Enrollment is open until (.+)\.$", re.MULTILINE)
+PAIRING_NOTIFICATION_ID = "atvr4samsung_pairing"
+PAIRING_LOCK = threading.Lock()
 
 
 class ConfigurationError(ValueError):
@@ -303,11 +310,78 @@ def has_paired_phones() -> bool:
     return not result.stdout.startswith("No paired devices (")
 
 
-def open_pairing_window(minutes: int, *, reason: str) -> None:
+def publish_pairing_notification(pin: str, expiry: str) -> bool:
+    """Publish pairing details through Home Assistant without exposing its bearer token."""
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        log("Home Assistant API token is unavailable; the pairing PIN is in this log only.")
+        return False
+    payload = json.dumps(
+        {
+            "title": "Pair an iPhone with Samsung TV Remote",
+            "message": (
+                f"Enter **{pin}** in Control Center → Apple TV Remote. "
+                f"This pairing window is open until {expiry}."
+            ),
+            "notification_id": PAIRING_NOTIFICATION_ID,
+        }
+    ).encode("utf-8")
+    notification = urllib_request.Request(
+        "http://supervisor/core/api/services/persistent_notification/create",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(notification, timeout=5.0) as response:
+            if not 200 <= response.status < 300:
+                raise RuntimeError(f"Home Assistant returned HTTP {response.status}")
+    except (OSError, RuntimeError, urllib_error.URLError) as exc:
+        log(f"Could not create the Home Assistant pairing notification: {type(exc).__name__}.")
+        return False
+    log("Created a Home Assistant notification with the pairing PIN and expiry.")
+    return True
+
+
+def open_pairing_window(minutes: int, *, reason: str) -> bool:
     log(f"{reason} ({minutes}-minute window).")
-    result = run_admin(["--minutes", str(minutes), "pair"])
-    if result.returncode != 0:
-        raise RuntimeError("could not open the iPhone pairing window")
+    with PAIRING_LOCK:
+        result = run_admin(["--minutes", str(minutes), "pair"], capture=True)
+        if result.stdout:
+            print(result.stdout, end="" if result.stdout.endswith("\n") else "\n", flush=True)
+        if result.returncode != 0:
+            raise RuntimeError("could not open the iPhone pairing window")
+        pin_match = PAIRING_PIN_PATTERN.search(result.stdout)
+        expiry_match = PAIRING_EXPIRY_PATTERN.search(result.stdout)
+        if pin_match is None or expiry_match is None:
+            raise RuntimeError("pairing opened but its PIN or expiry could not be read")
+        return publish_pairing_notification(pin_match.group(1), expiry_match.group(1))
+
+
+def handle_input_line(line: str, minutes: int) -> None:
+    """Handle one JSON object delivered by the Home Assistant app-input action."""
+    try:
+        message = json.loads(line)
+    except json.JSONDecodeError:
+        log("Ignored malformed app input; expected JSON such as {\"command\":\"pair\"}.")
+        return
+    if not isinstance(message, dict) or message.get("command") != "pair":
+        log("Ignored unsupported app input; the available command is 'pair'.")
+        return
+    try:
+        open_pairing_window(minutes, reason="Home Assistant requested iPhone pairing")
+    except RuntimeError as exc:
+        log(f"Pairing request failed: {exc}")
+
+
+def listen_for_input(minutes: int) -> None:
+    """Process Home Assistant input actions for the lifetime of the app."""
+    for line in sys.stdin:
+        if line.strip():
+            handle_input_line(line, minutes)
 
 
 def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
@@ -354,6 +428,15 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
             )
         elif pairing_request:
             log("The configured pairing_request was already processed; pairing remains closed.")
+
+        input_thread = threading.Thread(
+            target=listen_for_input,
+            args=(minutes,),
+            name="home-assistant-input",
+            daemon=True,
+        )
+        input_thread.start()
+        log("Ready for the Home Assistant 'pair' input action.")
 
         return daemon.wait()
     except BaseException:

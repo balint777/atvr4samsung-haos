@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 WRAPPER_PATH = (
@@ -113,6 +113,53 @@ class AutomaticFirstPairingTests(unittest.TestCase):
         with patch.object(WRAPPER, "run_admin", return_value=result):
             with self.assertRaisesRegex(RuntimeError, "automatic pairing remains closed"):
                 WRAPPER.has_paired_phones()
+
+
+class PairingInputTests(unittest.TestCase):
+    def test_pair_command_opens_window(self) -> None:
+        with patch.object(WRAPPER, "open_pairing_window") as opened:
+            WRAPPER.handle_input_line('{"command":"pair"}', 7)
+        opened.assert_called_once_with(7, reason="Home Assistant requested iPhone pairing")
+
+    def test_unknown_or_malformed_input_is_ignored(self) -> None:
+        with patch.object(WRAPPER, "open_pairing_window") as opened:
+            WRAPPER.handle_input_line("not-json", 5)
+            WRAPPER.handle_input_line('{"command":"reset"}', 5)
+        opened.assert_not_called()
+
+    def test_pairing_output_is_sent_to_home_assistant(self) -> None:
+        result = WRAPPER.subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=(
+                "Enrollment is open until 2026-09-05T10:00:00+02:00.\n"
+                "Pairing PIN: 1234\n"
+            ),
+            stderr="",
+        )
+        with (
+            patch.object(WRAPPER, "run_admin", return_value=result),
+            patch.object(WRAPPER, "publish_pairing_notification", return_value=True) as notify,
+        ):
+            self.assertTrue(WRAPPER.open_pairing_window(5, reason="Test pairing"))
+        notify.assert_called_once_with("1234", "2026-09-05T10:00:00+02:00")
+
+    def test_notification_uses_core_api_without_leaking_token(self) -> None:
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        with (
+            patch.dict(WRAPPER.os.environ, {"SUPERVISOR_TOKEN": "secret-token"}),
+            patch.object(WRAPPER.urllib_request, "urlopen", return_value=response) as opened,
+        ):
+            self.assertTrue(WRAPPER.publish_pairing_notification("1234", "soon"))
+        request = opened.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "http://supervisor/core/api/services/persistent_notification/create",
+        )
+        self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
+        self.assertNotIn(b"secret-token", request.data)
 
 
 if __name__ == "__main__":

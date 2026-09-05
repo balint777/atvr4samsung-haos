@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Accept a `{"command":"pair"}` Home Assistant app-input action without
+  restarting the bridge.
+- Create a persistent Home Assistant notification containing the temporary
+  pairing PIN and expiry, while retaining the log output as a fallback.
+
 ## 0.2.0
 
 - Open a temporary pairing window automatically at startup while no iPhone is
