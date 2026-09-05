@@ -15,7 +15,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install PyYAML
+      - run: >-
+          python -m pip install PyYAML cryptography==49.0.0
+          chacha20poly1305-reuseable==0.13.2 zeroconf==0.150.0
       - run: >-
           python -m pip install --no-deps --require-hashes
           -r atvr4samsung/build/homekit-requirements.txt

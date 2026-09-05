@@ -27,7 +27,8 @@ RUN python3 /usr/local/libexec/atvr4samsung-apply-ios27-topshelf-patch.py
 RUN python3 /usr/local/libexec/atvr4samsung-verify-ios27-topshelf.py
 
 COPY build/homekit-requirements.txt /tmp/homekit-requirements.txt
-RUN python3 -m pip install --no-cache-dir --no-deps --require-hashes \
+RUN /usr/local/bin/python3 -m pip install --no-cache-dir --no-deps --require-hashes \
+        --target /opt/atvr4samsung/.venv/lib/python3.12/site-packages \
         -r /tmp/homekit-requirements.txt \
     && python3 -c "from pyhap.accessory_driver import AccessoryDriver"
 
