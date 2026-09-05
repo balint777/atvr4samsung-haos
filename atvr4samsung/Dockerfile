@@ -1,10 +1,10 @@
-# Upstream 2.1.2 multi-architecture image, pinned to the digest published in
-# atvr4samsung-2.1.2-release.env and its GitHub artifact attestation.
-FROM ghcr.io/balint777/atvr4samsung@sha256:b1c636fe1ba971513fdf021ff194cd655932b08681b83bd4b6a07d931b365abf
+# Upstream 2.2.0 multi-architecture image, pinned to the digest published in
+# atvr4samsung-2.2.0-release.env and its GitHub artifact attestation.
+FROM ghcr.io/balint777/atvr4samsung@sha256:4805adf802ae2cab92e16dee36df7eb6adf4cb2052e9352c921d67170cd3f5ba
 
 USER root
 
-ENV ATVR4SAMSUNG_HAOS_VERSION=0.4.0
+ENV ATVR4SAMSUNG_HAOS_VERSION=0.5.0
 
 COPY build/apply_touch_compat_patch.py /usr/local/libexec/atvr4samsung-apply-touch-compat-patch.py
 COPY build/verify_touch_compat.py /usr/local/libexec/atvr4samsung-verify-touch-compat.py

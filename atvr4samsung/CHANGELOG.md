@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Close an automatically opened pairing window after its first successful
+  enrollment; manually opened windows remain reusable until expiry.
+- Automatically dismiss the Home Assistant pairing notification when pairing
+  succeeds, the window expires, it is cancelled, or the app finds a stale
+  notification after restarting.
+
 ## 0.4.0
 
 - Detect an unpaired iPhone's Pair-Setup request, continue the same connection,

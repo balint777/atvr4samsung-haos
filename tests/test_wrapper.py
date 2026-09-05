@@ -142,7 +142,7 @@ class PairingInputTests(unittest.TestCase):
         )
         with (
             patch.object(WRAPPER, "run_admin", return_value=result),
-            patch.object(WRAPPER, "notify_active_pairing_window", return_value=True) as notify,
+            patch.object(WRAPPER, "sync_pairing_notification", return_value=True) as notify,
         ):
             self.assertTrue(WRAPPER.open_pairing_window(5, reason="Test pairing"))
         notify.assert_called_once_with()
@@ -160,13 +160,72 @@ class PairingInputTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            WRAPPER._pairing_notification_initialized = False
             WRAPPER._last_notified_pairing_generation = None
             with patch.object(
                 WRAPPER, "publish_pairing_notification", return_value=True
             ) as notify:
-                self.assertTrue(WRAPPER.notify_active_pairing_window(path))
-                self.assertFalse(WRAPPER.notify_active_pairing_window(path))
+                self.assertTrue(WRAPPER.sync_pairing_notification(path))
+                self.assertFalse(WRAPPER.sync_pairing_notification(path))
         notify.assert_called_once_with("8761", "in about 5 minutes")
+
+    def test_pairing_notification_is_dismissed_when_window_closes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pairing-window.json"
+            path.write_text(
+                WRAPPER.json.dumps(
+                    {
+                        "pin": "8761",
+                        "expires_at": WRAPPER.time.time() + 300,
+                        "generation": "a" * 32,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            WRAPPER._pairing_notification_initialized = False
+            WRAPPER._last_notified_pairing_generation = None
+            with (
+                patch.object(WRAPPER, "publish_pairing_notification", return_value=True),
+                patch.object(WRAPPER, "dismiss_pairing_notification", return_value=True) as dismiss,
+            ):
+                self.assertTrue(WRAPPER.sync_pairing_notification(path))
+                path.unlink()
+                self.assertTrue(WRAPPER.sync_pairing_notification(path))
+                self.assertFalse(WRAPPER.sync_pairing_notification(path))
+        dismiss.assert_called_once_with()
+
+    def test_startup_dismisses_a_stale_notification_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pairing-window.json"
+            WRAPPER._pairing_notification_initialized = False
+            WRAPPER._last_notified_pairing_generation = None
+            with patch.object(
+                WRAPPER, "dismiss_pairing_notification", return_value=True
+            ) as dismiss:
+                self.assertTrue(WRAPPER.sync_pairing_notification(path))
+                self.assertFalse(WRAPPER.sync_pairing_notification(path))
+        dismiss.assert_called_once_with()
+
+    def test_expired_window_dismisses_the_active_notification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pairing-window.json"
+            path.write_text(
+                WRAPPER.json.dumps(
+                    {
+                        "pin": "8761",
+                        "expires_at": WRAPPER.time.time() - 1,
+                        "generation": "a" * 32,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            WRAPPER._pairing_notification_initialized = True
+            WRAPPER._last_notified_pairing_generation = "a" * 32
+            with patch.object(
+                WRAPPER, "dismiss_pairing_notification", return_value=True
+            ) as dismiss:
+                self.assertTrue(WRAPPER.sync_pairing_notification(path))
+        dismiss.assert_called_once_with()
 
     def test_notification_uses_core_api_without_leaking_token(self) -> None:
         response = MagicMock()
@@ -187,6 +246,27 @@ class PairingInputTests(unittest.TestCase):
         body = WRAPPER.json.loads(request.data)
         self.assertIn("1234", body["title"])
         self.assertIn("1. Open", body["message"])
+
+    def test_notification_dismissal_uses_core_api_without_leaking_token(self) -> None:
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        with (
+            patch.dict(WRAPPER.os.environ, {"SUPERVISOR_TOKEN": "secret-token"}),
+            patch.object(WRAPPER.urllib_request, "urlopen", return_value=response) as opened,
+        ):
+            self.assertTrue(WRAPPER.dismiss_pairing_notification())
+        request = opened.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "http://supervisor/core/api/services/persistent_notification/dismiss",
+        )
+        self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
+        self.assertNotIn(b"secret-token", request.data)
+        self.assertEqual(
+            WRAPPER.json.loads(request.data),
+            {"notification_id": WRAPPER.PAIRING_NOTIFICATION_ID},
+        )
 
 
 if __name__ == "__main__":

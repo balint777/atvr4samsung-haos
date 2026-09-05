@@ -3,7 +3,7 @@
 - The app uses host networking because Apple Companion discovery requires mDNS
   multicast and TV wake-up requires Wake-on-LAN. It therefore has less network
   isolation than a normal HAOS app.
-- Home Assistant Core API access is used only to create the pairing-PIN
+- Home Assistant Core API access is used only to create and dismiss the pairing-PIN
   notification. The app has no Supervisor management API permission,
   privileged capability, Docker socket, or Home Assistant configuration mount.
 - The bridge process drops from root to UID/GID 65532 before it contacts the TV
@@ -15,7 +15,9 @@
 - With `pair_on_demand` enabled, an admitted LAN Pair-Setup request opens one
   short identity-bound window. Repeated requests reuse it, existing attempt
   throttles still apply, and enrollment still requires the PIN delivered to
-  Home Assistant. The explicit input action remains available as a fallback.
+  Home Assistant. The first successful enrollment consumes an on-demand window;
+  an operator-opened window remains reusable until expiry. The explicit input
+  action remains available as a fallback.
 - The Supervisor bearer token is read only from the environment, sent only to
   the internal Home Assistant Core proxy, and never written to logs or state.
 

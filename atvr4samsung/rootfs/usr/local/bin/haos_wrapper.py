@@ -41,6 +41,7 @@ PAIRING_NOTIFICATION_ID = "atvr4samsung_pairing"
 PAIRING_LOCK = threading.Lock()
 PAIRING_WINDOW_PATH = STATE_DIR / "pairing-window.json"
 PAIRING_NOTIFICATION_LOCK = threading.Lock()
+_pairing_notification_initialized = False
 _last_notified_pairing_generation: str | None = None
 
 
@@ -361,6 +362,33 @@ def publish_pairing_notification(pin: str, expiry: str) -> bool:
     return True
 
 
+def dismiss_pairing_notification() -> bool:
+    """Remove pairing details once their window is no longer usable."""
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        log("Home Assistant API token is unavailable; a stale pairing notification may remain.")
+        return False
+    payload = json.dumps({"notification_id": PAIRING_NOTIFICATION_ID}).encode("utf-8")
+    notification = urllib_request.Request(
+        "http://supervisor/core/api/services/persistent_notification/dismiss",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(notification, timeout=5.0) as response:
+            if not 200 <= response.status < 300:
+                raise RuntimeError(f"Home Assistant returned HTTP {response.status}")
+    except (OSError, RuntimeError, urllib_error.URLError) as exc:
+        log(f"Could not dismiss the Home Assistant pairing notification: {type(exc).__name__}.")
+        return False
+    log("Dismissed the expired or completed Home Assistant pairing notification.")
+    return True
+
+
 def read_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> dict[str, Any] | None:
     """Read only the notification fields from a live private pairing-window record."""
     try:
@@ -380,29 +408,36 @@ def read_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> dict[str, An
     return {"pin": pin, "expires_at": expiry, "generation": generation}
 
 
-def notify_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> bool:
-    """Publish each durable pairing-window generation at most once."""
-    global _last_notified_pairing_generation
-    window = read_active_pairing_window(path)
-    if window is None:
-        return False
-    generation = str(window["generation"])
+def sync_pairing_notification(path: Path = PAIRING_WINDOW_PATH) -> bool:
+    """Keep one Home Assistant notification aligned with the durable pairing window."""
+    global _last_notified_pairing_generation, _pairing_notification_initialized
     with PAIRING_NOTIFICATION_LOCK:
-        if generation == _last_notified_pairing_generation:
+        window = read_active_pairing_window(path)
+        if window is None:
+            if _pairing_notification_initialized and _last_notified_pairing_generation is None:
+                return False
+            _pairing_notification_initialized = True
+            _last_notified_pairing_generation = None
+            dismiss_pairing_notification()
+            return True
+
+        generation = str(window["generation"])
+        if _pairing_notification_initialized and generation == _last_notified_pairing_generation:
             return False
+        _pairing_notification_initialized = True
         _last_notified_pairing_generation = generation
-    pin = str(window["pin"])
-    minutes = max(1, math.ceil((float(window["expires_at"]) - time.time()) / 60))
-    expiry = f"in about {minutes} minute{'s' if minutes != 1 else ''}"
-    log(f"Pairing PIN: {pin} (expires {expiry}).")
-    publish_pairing_notification(pin, expiry)
-    return True
+        pin = str(window["pin"])
+        minutes = max(1, math.ceil((float(window["expires_at"]) - time.time()) / 60))
+        expiry = f"in about {minutes} minute{'s' if minutes != 1 else ''}"
+        log(f"Pairing PIN: {pin} (expires {expiry}).")
+        publish_pairing_notification(pin, expiry)
+        return True
 
 
 def watch_pairing_windows(stop: threading.Event, interval: float = 0.5) -> None:
     """Bridge core-created on-demand windows into Home Assistant notifications."""
     while not stop.is_set():
-        notify_active_pairing_window()
+        sync_pairing_notification()
         stop.wait(interval)
 
 
@@ -418,7 +453,7 @@ def open_pairing_window(minutes: int, *, reason: str) -> bool:
         expiry_match = PAIRING_EXPIRY_PATTERN.search(result.stdout)
         if pin_match is None or expiry_match is None:
             raise RuntimeError("pairing opened but its PIN or expiry could not be read")
-        return notify_active_pairing_window()
+        return sync_pairing_notification()
 
 
 def handle_input_line(line: str, minutes: int) -> None:

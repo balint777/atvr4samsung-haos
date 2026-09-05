@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply Apple Watch button/media input compatibility to upstream 2.1.2."""
+"""Apply Apple Watch button/media input compatibility to upstream 2.2.0."""
 
 from __future__ import annotations
 

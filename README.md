@@ -28,12 +28,14 @@ Home Assistant.
 
 The wrapper is intentionally thin. It:
 
-- pins upstream `atvr4samsung` 2.0.1 by its signed multi-architecture OCI digest;
+- pins upstream `atvr4samsung` 2.2.0 by its signed multi-architecture OCI digest;
 - translates Supervisor options into the upstream YAML configuration;
 - keeps identity, phone pairings, the Samsung token, and TLS pin in app data;
 - runs the bridge as unprivileged UID/GID 65532;
 - detects an unpaired iPhone's setup request and publishes its temporary PIN
   as a Home Assistant notification;
+- closes an on-demand window after the first successful enrollment and removes
+  the notification on completion or expiry;
 - retains a Home Assistant input action for manually opening pairing;
 - retains one-shot request fields for pairing and Apple-side identity resets.
 

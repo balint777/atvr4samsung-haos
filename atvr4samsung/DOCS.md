@@ -1,6 +1,6 @@
 # Setup
 
-This app wraps upstream `atvr4samsung` 2.1.2. It advertises an Apple TV-like
+This app wraps upstream `atvr4samsung` 2.2.0. It advertises an Apple TV-like
 Companion Link service on the HAOS host and sends commands directly to the
 Samsung TV. Home Assistant automations and the HomeKit Bridge are not involved
 in this path.
@@ -16,7 +16,7 @@ in this path.
 - Turn the television on for initial TLS trust and Samsung remote approval.
 
 The app uses host networking for mDNS and Wake-on-LAN. It requests the Home
-Assistant Core API only to create pairing notifications. It does not request
+Assistant Core API only to create and dismiss pairing notifications. It does not request
 the Docker socket, privileged capabilities, the Supervisor management API, or
 access to Home Assistant's configuration.
 
@@ -64,7 +64,10 @@ they do not silently trust a changed certificate.
 With `pair_on_demand` enabled, select **Samsung TV** in the iPhone's Apple TV
 Remote. The app recognizes the unpaired phone's setup request, opens a temporary
 window, and creates a Home Assistant notification containing the four-digit PIN.
-No app restart or Developer Tools action is needed.
+No app restart or Developer Tools action is needed. The automatically opened
+window closes after the first successful pairing, and the notification is
+removed immediately. If nobody pairs, the notification is removed when the
+window expires.
 
 `pairing_request` is a one-shot request token, not the four-digit PIN. Enter any
 new label when adding another phone, save the configuration and restart the
@@ -95,10 +98,11 @@ the following input:
 {"command":"pair"}
 ```
 
-The app opens a fresh window and creates a persistent Home Assistant
-notification containing the PIN and expiry. The same information remains in
-the app log as a fallback. This action can also be placed on a dashboard button
-and remains useful if `pair_on_demand` is disabled.
+The app opens a fresh window and creates a Home Assistant notification containing
+the PIN and expiry. Home Assistant stores it persistently so it is not lost like
+a brief toast, but the app removes it automatically when the window closes. The
+same information remains in the app log as a fallback. This action can also be
+placed on a dashboard button and remains useful if `pair_on_demand` is disabled.
 
 On the first actual command, Samsung should display an **Allow remote device**
 prompt for `samsung_remote_name`. Approve it with the physical remote. The
