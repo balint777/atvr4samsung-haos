@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Open a temporary pairing window automatically at startup while no iPhone is
+  paired, with an opt-out for installations that require explicit enrollment.
+- Keep automatic enrollment closed if paired-phone state cannot be inspected.
+
 ## 0.1.6
 
 - Acknowledge the `FetchCurrentTopShelfItemsEvent` request added to the iOS 27

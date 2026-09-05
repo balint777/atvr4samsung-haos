@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 WRAPPER_PATH = (
@@ -35,6 +36,7 @@ def valid_options() -> dict:
         "wol_port": 9,
         "pairing_request": "phone-1",
         "pairing_window_minutes": 5,
+        "automatic_first_pairing": True,
         "reset_identity_request": "",
         "log_level": "INFO",
     }
@@ -49,6 +51,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(runtime["companion"]["state_dir"], "/data/state")
         self.assertEqual(wrapper["fingerprint"], "ab" * 32)
         self.assertEqual(wrapper["pairing_minutes"], 5)
+        self.assertTrue(wrapper["automatic_first_pairing"])
 
     def test_rejects_missing_tv_address(self) -> None:
         options = valid_options()
@@ -88,6 +91,29 @@ class OneShotRequestTests(unittest.TestCase):
             self.assertFalse(WRAPPER.request_is_new(marker, ""))
 
 
+class AutomaticFirstPairingTests(unittest.TestCase):
+    def test_detects_empty_pairing_store(self) -> None:
+        result = WRAPPER.subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="No paired devices (0/8).\n", stderr=""
+        )
+        with patch.object(WRAPPER, "run_admin", return_value=result):
+            self.assertFalse(WRAPPER.has_paired_phones())
+
+    def test_detects_an_existing_phone(self) -> None:
+        result = WRAPPER.subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="Paired devices (1/8):\n  phone-a\n", stderr=""
+        )
+        with patch.object(WRAPPER, "run_admin", return_value=result):
+            self.assertTrue(WRAPPER.has_paired_phones())
+
+    def test_pairing_state_inspection_fails_closed(self) -> None:
+        result = WRAPPER.subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="unreadable state"
+        )
+        with patch.object(WRAPPER, "run_admin", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "automatic pairing remains closed"):
+                WRAPPER.has_paired_phones()
+
+
 if __name__ == "__main__":
     unittest.main()
-

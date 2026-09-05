@@ -35,10 +35,12 @@ configuration:
   pairing_window_minutes:
     name: Pairing window minutes
     description: How long a requested iPhone enrollment window remains open, from 1 to 30 minutes.
+  automatic_first_pairing:
+    name: Automatic first iPhone pairing
+    description: Open a temporary pairing window at startup whenever no iPhone has been paired yet.
   reset_identity_request:
     name: One-shot identity reset
     description: DANGEROUS. Change to a new value to revoke all phones and replace the emulated Apple TV identity.
   log_level:
     name: Log level
     description: Runtime verbosity. DEBUG can include command details but never pairing secrets or Samsung tokens.
-

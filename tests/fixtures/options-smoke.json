@@ -10,6 +10,7 @@
   "wol_broadcast": "127.0.0.1",
   "wol_port": 9,
   "pairing_request": "",
+  "automatic_first_pairing": true,
   "pairing_window_minutes": 5,
   "reset_identity_request": "",
   "log_level": "INFO"

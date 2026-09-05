@@ -60,10 +60,15 @@ they do not silently trust a changed certificate.
 
 ## 4. Pair the iPhone
 
+On a new installation, `automatic_first_pairing` opens a temporary pairing
+window after startup when no iPhone has been paired. Find the four-digit PIN
+and its expiry in the app log, then follow the iPhone steps below. If the
+window expires before pairing succeeds, restart the app to open a fresh one.
+
 `pairing_request` is a one-shot request token, not the four-digit PIN. Enter any
-new label, for example `first-phone-2026-08-31`, save the configuration and
-restart the app. After the bridge becomes ready, the logs show a temporary
-four-digit PIN and its expiry.
+new label when adding another phone, save the configuration and restart the
+app. After the bridge becomes ready, the logs show a temporary four-digit PIN
+and its expiry.
 
 On the iPhone:
 
@@ -73,7 +78,11 @@ On the iPhone:
 
 The same `pairing_request` value is processed only once, including after later
 restarts. To add another phone or request another PIN, replace it with a new
-value. Pairing is closed at all other times.
+value. Once at least one phone is paired, enrollment is closed except during
+an explicitly requested window.
+
+Disable `automatic_first_pairing` if first-time enrollment must always require
+an explicit `pairing_request`.
 
 On the first actual command, Samsung should display an **Allow remote device**
 prompt for `samsung_remote_name`. Approve it with the physical remote. The
@@ -130,4 +139,3 @@ HAOS app backups include `/data`. This contains the generated runtime config,
 the emulated Apple TV identity, paired-phone public authorization, Samsung
 token, TLS certificate pin, and one-shot request markers. Treat backups as
 sensitive and restore all of this state together.
-

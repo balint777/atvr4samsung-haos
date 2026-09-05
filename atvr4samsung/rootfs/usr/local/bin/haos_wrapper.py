@@ -118,6 +118,9 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
         1,
         30,
     )
+    automatic_first_pairing = options.get("automatic_first_pairing", True)
+    if not isinstance(automatic_first_pairing, bool):
+        raise ConfigurationError("automatic_first_pairing must be true or false")
     log_level = _clean_string(options.get("log_level", "INFO"), "log_level").upper()
     if log_level not in LOG_LEVELS:
         raise ConfigurationError(f"log_level must be one of {', '.join(sorted(LOG_LEVELS))}")
@@ -147,6 +150,7 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
         "fingerprint": normalize_fingerprint(options.get("samsung_tls_fingerprint", "")),
         "pairing_request": pairing_request,
         "pairing_minutes": pairing_minutes,
+        "automatic_first_pairing": automatic_first_pairing,
         "reset_request": reset_request,
     }
     return runtime_config, wrapper_config
@@ -291,6 +295,21 @@ def wait_for_bridge(daemon: subprocess.Popen[Any], timeout: float = 30.0) -> Non
     raise RuntimeError("bridge did not become healthy within 30 seconds")
 
 
+def has_paired_phones() -> bool:
+    """Ask upstream for pairing state, failing closed if it cannot be inspected."""
+    result = run_admin(["pairs"], capture=True)
+    if result.returncode != 0:
+        raise RuntimeError("could not inspect paired phones; automatic pairing remains closed")
+    return not result.stdout.startswith("No paired devices (")
+
+
+def open_pairing_window(minutes: int, *, reason: str) -> None:
+    log(f"{reason} ({minutes}-minute window).")
+    result = run_admin(["--minutes", str(minutes), "pair"])
+    if result.returncode != 0:
+        raise RuntimeError("could not open the iPhone pairing window")
+
+
 def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
     reset_request = str(wrapper_config["reset_request"])
     if request_is_new(RESET_MARKER, reset_request):
@@ -324,13 +343,15 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
         log("Companion bridge is healthy and advertising on the LAN.")
 
         pairing_request = str(wrapper_config["pairing_request"])
+        minutes = int(wrapper_config["pairing_minutes"])
         if request_is_new(PAIRING_MARKER, pairing_request):
-            minutes = int(wrapper_config["pairing_minutes"])
-            log(f"Processing a new one-shot pairing request ({minutes}-minute window).")
-            result = run_admin(["--minutes", str(minutes), "pair"])
-            if result.returncode != 0:
-                raise RuntimeError("could not open the iPhone pairing window")
+            open_pairing_window(minutes, reason="Processing a new one-shot pairing request")
             mark_request(PAIRING_MARKER, pairing_request)
+        elif bool(wrapper_config["automatic_first_pairing"]) and not has_paired_phones():
+            open_pairing_window(
+                minutes,
+                reason="No paired iPhone was found; opening first-time pairing automatically",
+            )
         elif pairing_request:
             log("The configured pairing_request was already processed; pairing remains closed.")
 
