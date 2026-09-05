@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Detect an unpaired iPhone's Pair-Setup request, continue the same connection,
+  and automatically create a Home Assistant notification with its PIN.
+- Present the PIN prominently with numbered iPhone steps and a human-readable
+  relative expiry instead of a raw timestamp.
+- Disable startup-time automatic pairing by default now that client-triggered
+  pairing is available; the input action and one-shot request remain fallbacks.
+
 ## 0.3.0
 
 - Accept a `{"command":"pair"}` Home Assistant app-input action without

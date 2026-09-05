@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -38,6 +39,9 @@ PAIRING_PIN_PATTERN = re.compile(r"^Pairing PIN: ([0-9]{4})$", re.MULTILINE)
 PAIRING_EXPIRY_PATTERN = re.compile(r"^Enrollment is open until (.+)\.$", re.MULTILINE)
 PAIRING_NOTIFICATION_ID = "atvr4samsung_pairing"
 PAIRING_LOCK = threading.Lock()
+PAIRING_WINDOW_PATH = STATE_DIR / "pairing-window.json"
+PAIRING_NOTIFICATION_LOCK = threading.Lock()
+_last_notified_pairing_generation: str | None = None
 
 
 class ConfigurationError(ValueError):
@@ -128,6 +132,9 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
     automatic_first_pairing = options.get("automatic_first_pairing", True)
     if not isinstance(automatic_first_pairing, bool):
         raise ConfigurationError("automatic_first_pairing must be true or false")
+    pair_on_demand = options.get("pair_on_demand", True)
+    if not isinstance(pair_on_demand, bool):
+        raise ConfigurationError("pair_on_demand must be true or false")
     log_level = _clean_string(options.get("log_level", "INFO"), "log_level").upper()
     if log_level not in LOG_LEVELS:
         raise ConfigurationError(f"log_level must be one of {', '.join(sorted(LOG_LEVELS))}")
@@ -138,6 +145,8 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
             "port": companion_port,
             "model": model,
             "state_dir": str(STATE_DIR),
+            "pair_on_demand": pair_on_demand,
+            "pairing_window_seconds": pairing_minutes * 60,
         },
         "samsung": {
             "host": samsung_host,
@@ -158,6 +167,7 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
         "pairing_request": pairing_request,
         "pairing_minutes": pairing_minutes,
         "automatic_first_pairing": automatic_first_pairing,
+        "pair_on_demand": pair_on_demand,
         "reset_request": reset_request,
     }
     return runtime_config, wrapper_config
@@ -318,10 +328,15 @@ def publish_pairing_notification(pin: str, expiry: str) -> bool:
         return False
     payload = json.dumps(
         {
-            "title": "Pair an iPhone with Samsung TV Remote",
+            "title": f"Apple TV Remote pairing code: {pin}",
             "message": (
-                f"Enter **{pin}** in Control Center → Apple TV Remote. "
-                f"This pairing window is open until {expiry}."
+                f"## {pin}\n\n"
+                "On your iPhone:\n"
+                "1. Open **Control Center**.\n"
+                "2. Tap **Apple TV Remote**.\n"
+                "3. Select **Samsung TV**.\n"
+                f"4. Enter **{pin}**.\n\n"
+                f"This code expires **{expiry}**."
             ),
             "notification_id": PAIRING_NOTIFICATION_ID,
         }
@@ -346,6 +361,51 @@ def publish_pairing_notification(pin: str, expiry: str) -> bool:
     return True
 
 
+def read_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> dict[str, Any] | None:
+    """Read only the notification fields from a live private pairing-window record."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        pin = value["pin"]
+        expiry = float(value["expires_at"])
+        generation = value["generation"]
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(pin, str)
+        or PAIRING_PIN_PATTERN.fullmatch(f"Pairing PIN: {pin}") is None
+        or not isinstance(generation, str)
+        or expiry <= time.time()
+    ):
+        return None
+    return {"pin": pin, "expires_at": expiry, "generation": generation}
+
+
+def notify_active_pairing_window(path: Path = PAIRING_WINDOW_PATH) -> bool:
+    """Publish each durable pairing-window generation at most once."""
+    global _last_notified_pairing_generation
+    window = read_active_pairing_window(path)
+    if window is None:
+        return False
+    generation = str(window["generation"])
+    with PAIRING_NOTIFICATION_LOCK:
+        if generation == _last_notified_pairing_generation:
+            return False
+        _last_notified_pairing_generation = generation
+    pin = str(window["pin"])
+    minutes = max(1, math.ceil((float(window["expires_at"]) - time.time()) / 60))
+    expiry = f"in about {minutes} minute{'s' if minutes != 1 else ''}"
+    log(f"Pairing PIN: {pin} (expires {expiry}).")
+    publish_pairing_notification(pin, expiry)
+    return True
+
+
+def watch_pairing_windows(stop: threading.Event, interval: float = 0.5) -> None:
+    """Bridge core-created on-demand windows into Home Assistant notifications."""
+    while not stop.is_set():
+        notify_active_pairing_window()
+        stop.wait(interval)
+
+
 def open_pairing_window(minutes: int, *, reason: str) -> bool:
     log(f"{reason} ({minutes}-minute window).")
     with PAIRING_LOCK:
@@ -358,7 +418,7 @@ def open_pairing_window(minutes: int, *, reason: str) -> bool:
         expiry_match = PAIRING_EXPIRY_PATTERN.search(result.stdout)
         if pin_match is None or expiry_match is None:
             raise RuntimeError("pairing opened but its PIN or expiry could not be read")
-        return publish_pairing_notification(pin_match.group(1), expiry_match.group(1))
+        return notify_active_pairing_window()
 
 
 def handle_input_line(line: str, minutes: int) -> None:
@@ -438,7 +498,19 @@ def manage_daemon(wrapper_config: Mapping[str, Any]) -> int:
         input_thread.start()
         log("Ready for the Home Assistant 'pair' input action.")
 
-        return daemon.wait()
+        pairing_watch_stop = threading.Event()
+        pairing_watch_thread = threading.Thread(
+            target=watch_pairing_windows,
+            args=(pairing_watch_stop,),
+            name="pairing-window-notifier",
+            daemon=True,
+        )
+        pairing_watch_thread.start()
+
+        try:
+            return daemon.wait()
+        finally:
+            pairing_watch_stop.set()
     except BaseException:
         if daemon.poll() is None:
             daemon.terminate()

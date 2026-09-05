@@ -20,8 +20,9 @@ For a local test, copy the `atvr4samsung/` directory to `/addons/atvr4samsung`
 on HAOS and reload the app store.
 
 Read the app's **Documentation** tab before starting it. Initial setup requires
-an explicit Samsung TLS-certificate fingerprint; first-phone pairing then opens
-automatically and publishes its temporary PIN in Home Assistant.
+an explicit Samsung TLS-certificate fingerprint. Selecting the remote from an
+unpaired iPhone then opens pairing on demand and publishes its temporary PIN in
+Home Assistant.
 
 ## Scope
 
@@ -31,8 +32,9 @@ The wrapper is intentionally thin. It:
 - translates Supervisor options into the upstream YAML configuration;
 - keeps identity, phone pairings, the Samsung token, and TLS pin in app data;
 - runs the bridge as unprivileged UID/GID 65532;
-- accepts a Home Assistant input action for pairing additional phones and
-  publishes the temporary PIN as a notification;
+- detects an unpaired iPhone's setup request and publishes its temporary PIN
+  as a Home Assistant notification;
+- retains a Home Assistant input action for manually opening pairing;
 - retains one-shot request fields for pairing and Apple-side identity resets.
 
 The upstream project currently describes Samsung Frame TVs as its tested

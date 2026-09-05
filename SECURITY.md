@@ -12,9 +12,10 @@
   certificate pin are stored under the app's private `/data/state` directory.
 - The Samsung WebSocket uses TLS port 8002 and starts only after the operator
   approves the exact live certificate SHA-256 fingerprint.
-- A short pairing window opens automatically while no phone is paired, unless
-  disabled. Later windows require either a new one-shot `pairing_request` or
-  the explicit Home Assistant `pair` input action.
+- With `pair_on_demand` enabled, an admitted LAN Pair-Setup request opens one
+  short identity-bound window. Repeated requests reuse it, existing attempt
+  throttles still apply, and enrollment still requires the PIN delivered to
+  Home Assistant. The explicit input action remains available as a fallback.
 - The Supervisor bearer token is read only from the environment, sent only to
   the internal Home Assistant Core proxy, and never written to logs or state.
 

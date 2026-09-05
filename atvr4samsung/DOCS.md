@@ -1,6 +1,6 @@
 # Setup
 
-This app wraps upstream `atvr4samsung` 2.0.1. It advertises an Apple TV-like
+This app wraps upstream `atvr4samsung` 2.1.2. It advertises an Apple TV-like
 Companion Link service on the HAOS host and sends commands directly to the
 Samsung TV. Home Assistant automations and the HomeKit Bridge are not involved
 in this path.
@@ -61,10 +61,10 @@ they do not silently trust a changed certificate.
 
 ## 4. Pair the iPhone
 
-On a new installation, `automatic_first_pairing` opens a temporary pairing
-window after startup when no iPhone has been paired. Find the four-digit PIN
-and its expiry in the app log, then follow the iPhone steps below. If the
-window expires before pairing succeeds, restart the app to open a fresh one.
+With `pair_on_demand` enabled, select **Samsung TV** in the iPhone's Apple TV
+Remote. The app recognizes the unpaired phone's setup request, opens a temporary
+window, and creates a Home Assistant notification containing the four-digit PIN.
+No app restart or Developer Tools action is needed.
 
 `pairing_request` is a one-shot request token, not the four-digit PIN. Enter any
 new label when adding another phone, save the configuration and restart the
@@ -82,8 +82,9 @@ restarts. To add another phone or request another PIN, replace it with a new
 value. Once at least one phone is paired, enrollment is closed except during
 an explicitly requested window.
 
-Disable `automatic_first_pairing` if first-time enrollment must always require
-an explicit `pairing_request`.
+`automatic_first_pairing` is an older optional behavior that opens enrollment
+at app startup whenever no phone is paired. It is disabled by default because
+on-demand pairing opens the window only when a phone actually requests it.
 
 ### Pair another iPhone without restarting
 
@@ -96,7 +97,8 @@ the following input:
 
 The app opens a fresh window and creates a persistent Home Assistant
 notification containing the PIN and expiry. The same information remains in
-the app log as a fallback. This action can also be placed on a dashboard button.
+the app log as a fallback. This action can also be placed on a dashboard button
+and remains useful if `pair_on_demand` is disabled.
 
 On the first actual command, Samsung should display an **Allow remote device**
 prompt for `samsung_remote_name`. Approve it with the physical remote. The

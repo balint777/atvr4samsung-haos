@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the audited iOS touch compatibility patch to upstream 2.0.1."""
+"""Apply the audited iOS touch compatibility patch to upstream 2.1.2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 
-EXPECTED_SOURCE_SHA256 = "8e6f4bc55a8123a0bdf82e56dc3bd082ffb31f217dd0fce390c7e7098bfbcc4f"
+EXPECTED_SOURCE_SHA256 = "f7dcd72621fa584f0bdaa786ebd4580c37ab4b43de63471855bbec74311a085e"
 
 OLD_BLOCK = '''        try:
             super().handle__hidt(message)

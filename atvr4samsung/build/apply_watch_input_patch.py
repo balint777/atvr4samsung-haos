@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply Apple Watch button/media input compatibility to upstream 2.0.1."""
+"""Apply Apple Watch button/media input compatibility to upstream 2.1.2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 
-EXPECTED_SERVER_SHA256 = "1eeec05593f2b2f404dad8c271bb354586cbfcb4b4ab19e3aa356d2c29e7beb5"
+EXPECTED_SERVER_SHA256 = "d6d8908b2a7c7aa5c344ea6f210952421f1a95b3f3753507fcc6fc6f334c7c93"
 EXPECTED_RELAY_SHA256 = "9dc7c3f445170e6ad9a95d7f60045afc3812113a9dd9bcd8b725c12b5b0bc353"
 
 OLD_RELEASE_CONSTANT = '''_BUTTON_RELEASE = 2

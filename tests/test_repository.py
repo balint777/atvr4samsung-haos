@@ -47,7 +47,11 @@ class RepositoryMetadataTests(unittest.TestCase):
     def test_upstream_image_is_digest_pinned(self) -> None:
         dockerfile = (ADDON / "Dockerfile").read_text(encoding="utf-8")
         metadata = yaml.safe_load((ADDON / "config.yaml").read_text(encoding="utf-8"))
-        match = re.search(r"^FROM (ghcr\.io/vb3/atvr4samsung@sha256:[0-9a-f]{64})$", dockerfile, re.M)
+        match = re.search(
+            r"^FROM (ghcr\.io/balint777/atvr4samsung@sha256:[0-9a-f]{64})$",
+            dockerfile,
+            re.M,
+        )
         self.assertIsNotNone(match)
         self.assertNotIn(":latest", dockerfile)
         self.assertIn('haos_wrapper.py", "healthcheck"', dockerfile)

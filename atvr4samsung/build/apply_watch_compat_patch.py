@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the audited Apple Watch Companion compatibility patch to upstream 2.0.1."""
+"""Apply the audited Apple Watch Companion compatibility patch to upstream 2.1.2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 
-EXPECTED_SOURCE_SHA256 = "24abb5f860dcf9a2c2223e53acd94935b7309971226b3764aaefd3175bfe9e4b"
+EXPECTED_SOURCE_SHA256 = "74580f3c38dab6b41ed2c06cb145f0815a970da531a6cc2d088320a1264a84e3"
 
 LOGGER_BLOCK = '''_LOGGER = logging.getLogger(__name__)
 

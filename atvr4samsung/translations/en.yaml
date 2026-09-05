@@ -36,8 +36,11 @@ configuration:
     name: Pairing window minutes
     description: How long a requested iPhone enrollment window remains open, from 1 to 30 minutes.
   automatic_first_pairing:
-    name: Automatic first iPhone pairing
-    description: Open a temporary pairing window at startup whenever no iPhone has been paired yet.
+    name: Open pairing at startup
+    description: Legacy fallback that opens a pairing window on startup whenever no iPhone has been paired yet.
+  pair_on_demand:
+    name: Pair when an iPhone connects
+    description: Show a pairing-code notification automatically when an unpaired iPhone selects this remote.
   reset_identity_request:
     name: One-shot identity reset
     description: DANGEROUS. Change to a new value to revoke all phones and replace the emulated Apple TV identity.

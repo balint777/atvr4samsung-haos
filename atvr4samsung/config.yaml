@@ -1,5 +1,5 @@
 name: atvr4samsung Companion Bridge
-version: "0.3.0"
+version: "0.4.0"
 slug: atvr4samsung
 description: >-
   Emulate an Apple TV Companion endpoint and relay the native iPhone and Apple
@@ -27,7 +27,8 @@ options:
   wol_port: 9
   pairing_request: ""
   pairing_window_minutes: 5
-  automatic_first_pairing: true
+  automatic_first_pairing: false
+  pair_on_demand: true
   reset_identity_request: ""
   log_level: INFO
 schema:
@@ -44,5 +45,6 @@ schema:
   pairing_request: "str?"
   pairing_window_minutes: int
   automatic_first_pairing: bool
+  pair_on_demand: bool
   reset_identity_request: "str?"
   log_level: list(DEBUG|INFO|WARNING|ERROR|CRITICAL)

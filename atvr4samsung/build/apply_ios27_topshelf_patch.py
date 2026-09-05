@@ -8,7 +8,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 
-EXPECTED_SOURCE_SHA256 = "83ca8ab61a067cb297e45875b6114f78062fa2bd8ca93f99b825daedce590457"
+EXPECTED_SOURCE_SHA256 = "b443386cdfcba41cb56517fe37a4d8aa112ac1578aae5ac66f36911676133516"
 
 OLD_BLOCK = '''    def handle_fetchupnextinfoevent(self, message):  # noqa: N802
         self.send_response(message, {})

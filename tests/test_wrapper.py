@@ -37,6 +37,7 @@ def valid_options() -> dict:
         "pairing_request": "phone-1",
         "pairing_window_minutes": 5,
         "automatic_first_pairing": True,
+        "pair_on_demand": True,
         "reset_identity_request": "",
         "log_level": "INFO",
     }
@@ -52,6 +53,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(wrapper["fingerprint"], "ab" * 32)
         self.assertEqual(wrapper["pairing_minutes"], 5)
         self.assertTrue(wrapper["automatic_first_pairing"])
+        self.assertTrue(runtime["companion"]["pair_on_demand"])
+        self.assertEqual(runtime["companion"]["pairing_window_seconds"], 300)
 
     def test_rejects_missing_tv_address(self) -> None:
         options = valid_options()
@@ -127,7 +130,7 @@ class PairingInputTests(unittest.TestCase):
             WRAPPER.handle_input_line('{"command":"reset"}', 5)
         opened.assert_not_called()
 
-    def test_pairing_output_is_sent_to_home_assistant(self) -> None:
+    def test_pairing_output_notifies_the_durable_window(self) -> None:
         result = WRAPPER.subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -139,10 +142,31 @@ class PairingInputTests(unittest.TestCase):
         )
         with (
             patch.object(WRAPPER, "run_admin", return_value=result),
-            patch.object(WRAPPER, "publish_pairing_notification", return_value=True) as notify,
+            patch.object(WRAPPER, "notify_active_pairing_window", return_value=True) as notify,
         ):
             self.assertTrue(WRAPPER.open_pairing_window(5, reason="Test pairing"))
-        notify.assert_called_once_with("1234", "2026-09-05T10:00:00+02:00")
+        notify.assert_called_once_with()
+
+    def test_new_on_demand_window_is_notified_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pairing-window.json"
+            path.write_text(
+                WRAPPER.json.dumps(
+                    {
+                        "pin": "8761",
+                        "expires_at": WRAPPER.time.time() + 300,
+                        "generation": "a" * 32,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            WRAPPER._last_notified_pairing_generation = None
+            with patch.object(
+                WRAPPER, "publish_pairing_notification", return_value=True
+            ) as notify:
+                self.assertTrue(WRAPPER.notify_active_pairing_window(path))
+                self.assertFalse(WRAPPER.notify_active_pairing_window(path))
+        notify.assert_called_once_with("8761", "in about 5 minutes")
 
     def test_notification_uses_core_api_without_leaking_token(self) -> None:
         response = MagicMock()
@@ -160,6 +184,9 @@ class PairingInputTests(unittest.TestCase):
         )
         self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
         self.assertNotIn(b"secret-token", request.data)
+        body = WRAPPER.json.loads(request.data)
+        self.assertIn("1234", body["title"])
+        self.assertIn("1. Open", body["message"])
 
 
 if __name__ == "__main__":
