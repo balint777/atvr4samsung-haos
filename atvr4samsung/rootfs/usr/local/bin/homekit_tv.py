@@ -19,7 +19,7 @@ from urllib import request as urllib_request
 
 from pyhap.accessory import Accessory
 from pyhap.accessory_driver import AccessoryDriver
-from pyhap.const import CATEGORY_TELEVISION
+from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
 
 
 HOME_ASSISTANT_API = "http://supervisor/core/api"
@@ -200,7 +200,7 @@ class MinimalTelevisionAccessory(Accessory):
         client: HomeAssistantClient,
         initial_active: bool,
     ) -> None:
-        super().__init__(driver, name)
+        super().__init__(driver, name, aid=STANDALONE_AID)
         self.client = client
         self._last_active = initial_active
         self._last_api_error: str | None = None
@@ -264,7 +264,13 @@ class MinimalTelevisionAccessory(Accessory):
         try:
             if paired:
                 self.client.dismiss_pairing_notification()
-                log("Apple Home paired; dismissed its setup-code notification.")
+                controller_count = len(self.driver.state.paired_clients)
+                identity_label = "identity" if controller_count == 1 else "identities"
+                log(
+                    "Apple Home paired with "
+                    f"{controller_count} controller {identity_label}; dismissed its setup-code "
+                    "notification."
+                )
             else:
                 pincode = self.driver.state.pincode.decode("ascii")
                 self.client.create_pairing_notification(self.display_name, pincode)

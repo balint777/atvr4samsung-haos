@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from pyhap.accessory_driver import AccessoryDriver
-from pyhap.const import CATEGORY_TELEVISION
+from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
 
 
 SCRIPT_PATH = (
@@ -60,6 +60,13 @@ class MinimalTelevisionTests(unittest.TestCase):
         self.assertNotIn("RemoteKey", names)
         self.assertIsNone(accessory.get_service("TelevisionSpeaker"))
         self.assertIsNone(accessory.get_service("TargetControl"))
+
+    def test_is_a_standalone_accessory_with_protocol_information(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, accessory, _ = self.build_accessory(directory)
+
+        self.assertEqual(accessory.aid, STANDALONE_AID)
+        self.assertIsNotNone(accessory.get_service("HAPProtocolInformation"))
 
     def test_power_write_calls_only_media_player_service(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

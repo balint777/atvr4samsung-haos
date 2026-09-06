@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- Select and privately persist an available HomeKit TV port automatically when
+  `homekit_tv_port` is `0`, while retaining an explicit fixed-port override.
+- Replace an automatically selected port on startup if another service has
+  since occupied it.
+- Mark the TV as a standalone HomeKit accessory and publish the required HAP
+  protocol-information service for better Apple Home compatibility.
+- Report how many Apple controller identities the accessory has authorized,
+  without weakening pair verification for unknown Home hubs or residents.
+
 ## 0.6.0
 
 - Add an opt-in, standalone HomeKit Television accessory backed by a Home

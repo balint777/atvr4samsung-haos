@@ -39,6 +39,8 @@ The wrapper is intentionally thin. It:
 - retains a Home Assistant input action for manually opening pairing;
 - optionally advertises a separate, power-only HomeKit Television backed by an
   existing Home Assistant `media_player`, without HomeKit remote keys;
+- automatically chooses and remembers an available port for that HomeKit
+  accessory, with an optional fixed-port override;
 - retains one-shot request fields for pairing and Apple-side identity resets.
 
 The upstream project currently describes Samsung Frame TVs as its tested

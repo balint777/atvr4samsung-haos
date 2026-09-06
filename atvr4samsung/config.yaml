@@ -1,5 +1,5 @@
 name: atvr4samsung Companion Bridge
-version: "0.6.0"
+version: "0.7.0"
 slug: atvr4samsung
 description: >-
   Emulate an Apple TV Companion endpoint and relay the native iPhone and Apple
@@ -31,7 +31,7 @@ options:
   pair_on_demand: true
   homekit_tv_enabled: false
   homekit_tv_entity_id: ""
-  homekit_tv_port: 21064
+  homekit_tv_port: 0
   homekit_tv_reset_request: ""
   reset_identity_request: ""
   log_level: INFO
@@ -52,7 +52,7 @@ schema:
   pair_on_demand: bool
   homekit_tv_enabled: bool
   homekit_tv_entity_id: "str?"
-  homekit_tv_port: port
+  homekit_tv_port: int
   homekit_tv_reset_request: "str?"
   reset_identity_request: "str?"
   log_level: list(DEBUG|INFO|WARNING|ERROR|CRITICAL)

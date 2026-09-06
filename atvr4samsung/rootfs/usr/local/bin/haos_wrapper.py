@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,7 @@ RESET_MARKER = STATE_DIR / ".haos-reset-identity-request"
 HOMEKIT_RESET_MARKER = STATE_DIR / ".haos-homekit-reset-request"
 HOMEKIT_STATE_PATH = STATE_DIR / "homekit-tv.state"
 HOMEKIT_PIN_PATH = STATE_DIR / "homekit-tv.pincode"
+HOMEKIT_PORT_PATH = STATE_DIR / "homekit-tv.port"
 HOMEKIT_READY_PATH = STATE_DIR / ".homekit-tv-ready"
 HOMEKIT_TV_COMMAND = "/usr/local/bin/homekit_tv.py"
 SERVICE_UID = 65532
@@ -161,7 +163,7 @@ def build_runtime_config(options: Mapping[str, Any]) -> tuple[dict[str, Any], di
             "homekit_tv_entity_id is required when homekit_tv_enabled is true"
         )
     homekit_tv_port = _integer(
-        options.get("homekit_tv_port", 21064), "homekit_tv_port", 1, 65535
+        options.get("homekit_tv_port", 0), "homekit_tv_port", 0, 65535
     )
     if homekit_tv_enabled and homekit_tv_port == companion_port:
         raise ConfigurationError("homekit_tv_port must differ from companion_port")
@@ -548,12 +550,60 @@ def prepare_homekit_identity(reset_request: str) -> None:
     mark_request(HOMEKIT_RESET_MARKER, reset_request)
 
 
+def _available_homekit_port(requested_port: int) -> int | None:
+    """Return the bound port while proving it is currently available."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("0.0.0.0", requested_port))
+            return int(listener.getsockname()[1])
+    except OSError:
+        return None
+
+
+def resolve_homekit_tv_port(
+    configured_port: int, *, path: Path = HOMEKIT_PORT_PATH
+) -> int:
+    """Resolve port 0 to a private, stable, automatically selected TCP port."""
+    if configured_port:
+        return configured_port
+    if path.is_symlink():
+        raise ConfigurationError(f"refusing symlinked HomeKit port state: {path}")
+
+    saved_port: int | None = None
+    try:
+        raw_port = path.read_text(encoding="ascii").strip()
+        parsed_port = int(raw_port)
+        if 1 <= parsed_port <= 65535:
+            saved_port = parsed_port
+    except (FileNotFoundError, OSError, UnicodeError, ValueError):
+        pass
+
+    if saved_port is not None and _available_homekit_port(saved_port) == saved_port:
+        log(f"Reusing automatically selected HomeKit TV port {saved_port}.")
+        return saved_port
+    if saved_port is not None:
+        log(f"Saved HomeKit TV port {saved_port} is occupied; selecting a new one.")
+
+    selected_port = _available_homekit_port(0)
+    if selected_port is None:
+        raise RuntimeError("could not allocate an available HomeKit TV port")
+    _atomic_write(
+        path,
+        f"{selected_port}\n",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+    )
+    log(f"Selected and saved HomeKit TV port {selected_port} automatically.")
+    return selected_port
+
+
 def start_homekit_tv(wrapper_config: Mapping[str, Any]) -> subprocess.Popen[Any]:
     """Start the optional minimal HomeKit Television process."""
     try:
         HOMEKIT_READY_PATH.unlink()
     except FileNotFoundError:
         pass
+    port = resolve_homekit_tv_port(int(wrapper_config["homekit_tv_port"]))
     return subprocess.Popen(
         [
             sys.executable,
@@ -563,7 +613,7 @@ def start_homekit_tv(wrapper_config: Mapping[str, Any]) -> subprocess.Popen[Any]
             "--entity-id",
             str(wrapper_config["homekit_tv_entity_id"]),
             "--port",
-            str(wrapper_config["homekit_tv_port"]),
+            str(port),
             "--persist-file",
             str(HOMEKIT_STATE_PATH),
             "--pincode-file",

@@ -126,7 +126,9 @@ Then set:
 - `homekit_tv_enabled`: `true`
 - `homekit_tv_entity_id`: the existing Home Assistant entity, for example
   `media_player.living_room_tv`
-- `homekit_tv_port`: leave `21064` unless that host port is already in use
+- `homekit_tv_port`: leave `0` to choose and remember an available port
+  automatically; use a nonzero value only when firewall or VLAN rules require
+  a fixed port
 
 Save and restart the add-on. A Home Assistant notification provides the Apple
 Home setup code and exact steps. In the iPhone Home app, choose **+ → Add
@@ -149,6 +151,13 @@ If Apple Home retains a broken copy of this optional accessory, remove it from
 the Home app, put a new unique value in `homekit_tv_reset_request`, and restart
 the add-on. This revokes only the minimal HomeKit TV identity; it does not revoke
 phones paired with Companion Link.
+
+If the log says an Apple client attempted pair verification without being
+paired first after another controller paired successfully, do not bypass that
+check. The address is commonly an Apple TV or HomePod home hub whose HomeKit
+credentials did not synchronize. Update or restart that hub first. If it still
+fails, remove the accessory from Apple Home, reset this HomeKit TV identity as
+described above, and add it again after all home hubs are online.
 
 ## 6. Reset all Companion pairing
 
@@ -199,6 +208,6 @@ and restart once more.
 
 HAOS app backups include `/data`. This contains the generated runtime config,
 the emulated Companion identity, paired-phone public authorization, optional
-HomeKit identity and setup code, Samsung token, TLS certificate pin, and
-one-shot request markers. Treat backups as sensitive and restore all of this
-state together.
+HomeKit identity, setup code and automatically selected port, Samsung token,
+TLS certificate pin, and one-shot request markers. Treat backups as sensitive
+and restore all of this state together.

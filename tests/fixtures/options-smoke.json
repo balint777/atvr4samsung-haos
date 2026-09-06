@@ -15,7 +15,7 @@
   "pairing_window_minutes": 5,
   "homekit_tv_enabled": false,
   "homekit_tv_entity_id": "",
-  "homekit_tv_port": 21064,
+  "homekit_tv_port": 0,
   "homekit_tv_reset_request": "",
   "reset_identity_request": "",
   "log_level": "INFO"

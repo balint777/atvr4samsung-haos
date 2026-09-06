@@ -49,7 +49,7 @@ configuration:
     description: Existing media_player entity whose power state the minimal Apple Home television controls.
   homekit_tv_port:
     name: HomeKit TV TCP port
-    description: Fixed host-network port for the optional Apple Home accessory; it must differ from the Companion port.
+    description: Use 0 to choose and remember an available port automatically, or set a fixed host-network port different from the Companion port.
   homekit_tv_reset_request:
     name: One-shot HomeKit TV reset
     description: DANGEROUS. Change to a new value to revoke Apple Home and replace only the minimal television identity.

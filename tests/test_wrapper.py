@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import socket
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -40,7 +41,7 @@ def valid_options() -> dict:
         "pair_on_demand": True,
         "homekit_tv_enabled": False,
         "homekit_tv_entity_id": "",
-        "homekit_tv_port": 21064,
+        "homekit_tv_port": 0,
         "homekit_tv_reset_request": "",
         "reset_identity_request": "",
         "log_level": "INFO",
@@ -60,7 +61,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(runtime["companion"]["pair_on_demand"])
         self.assertEqual(runtime["companion"]["pairing_window_seconds"], 300)
         self.assertFalse(wrapper["homekit_tv_enabled"])
-        self.assertEqual(wrapper["homekit_tv_port"], 21064)
+        self.assertEqual(wrapper["homekit_tv_port"], 0)
 
     def test_rejects_missing_tv_address(self) -> None:
         options = valid_options()
@@ -115,6 +116,10 @@ class ConfigurationTests(unittest.TestCase):
         options["homekit_tv_entity_id"] = "media_player.tv"
         options["homekit_tv_port"] = options["companion_port"]
         with self.assertRaisesRegex(WRAPPER.ConfigurationError, "must differ"):
+            WRAPPER.build_runtime_config(options)
+
+        options["homekit_tv_port"] = -1
+        with self.assertRaisesRegex(WRAPPER.ConfigurationError, "between 0 and 65535"):
             WRAPPER.build_runtime_config(options)
 
 
@@ -310,6 +315,35 @@ class PairingInputTests(unittest.TestCase):
 
 
 class HomeKitLifecycleTests(unittest.TestCase):
+    def test_automatic_homekit_port_is_private_stable_and_available(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "homekit-tv.port"
+            first = WRAPPER.resolve_homekit_tv_port(0, path=path)
+            second = WRAPPER.resolve_homekit_tv_port(0, path=path)
+
+            self.assertEqual(first, second)
+            self.assertGreater(first, 0)
+            self.assertEqual(path.read_text(encoding="ascii").strip(), str(first))
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_automatic_homekit_port_replaces_an_occupied_saved_port(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "homekit-tv.port"
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                listener.bind(("0.0.0.0", 0))
+                occupied = listener.getsockname()[1]
+                path.write_text(f"{occupied}\n", encoding="ascii")
+                selected = WRAPPER.resolve_homekit_tv_port(0, path=path)
+
+            self.assertNotEqual(selected, occupied)
+            self.assertEqual(path.read_text(encoding="ascii").strip(), str(selected))
+
+    def test_explicit_homekit_port_is_not_replaced_or_persisted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "homekit-tv.port"
+            self.assertEqual(WRAPPER.resolve_homekit_tv_port(21065, path=path), 21065)
+            self.assertFalse(path.exists())
+
     def test_homekit_command_contains_only_non_secret_configuration(self) -> None:
         options = valid_options()
         options["homekit_tv_enabled"] = True
@@ -317,21 +351,27 @@ class HomeKitLifecycleTests(unittest.TestCase):
         _, wrapper = WRAPPER.build_runtime_config(options)
         process = MagicMock()
 
-        with patch.object(WRAPPER.subprocess, "Popen", return_value=process) as opened:
+        with (
+            patch.object(WRAPPER, "resolve_homekit_tv_port", return_value=32123),
+            patch.object(WRAPPER.subprocess, "Popen", return_value=process) as opened,
+        ):
             self.assertIs(WRAPPER.start_homekit_tv(wrapper), process)
 
         command = opened.call_args.args[0]
         self.assertIn("/usr/local/bin/homekit_tv.py", command)
         self.assertIn("media_player.living_room_tv", command)
+        self.assertIn("32123", command)
         self.assertNotIn("SUPERVISOR_TOKEN", " ".join(command))
 
     def test_homekit_reset_removes_only_its_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
             paths = [state / "homekit.state", state / "homekit.pin", state / "ready"]
+            port = state / "homekit.port"
             marker = state / "marker"
             for path in paths:
                 path.write_text("private", encoding="utf-8")
+            port.write_text("32123\n", encoding="ascii")
             with (
                 patch.object(WRAPPER, "HOMEKIT_STATE_PATH", paths[0]),
                 patch.object(WRAPPER, "HOMEKIT_PIN_PATH", paths[1]),
@@ -343,6 +383,7 @@ class HomeKitLifecycleTests(unittest.TestCase):
 
             self.assertTrue(marker.is_file())
             self.assertTrue(all(not path.exists() for path in paths))
+            self.assertEqual(port.read_text(encoding="ascii").strip(), "32123")
 
 
 if __name__ == "__main__":

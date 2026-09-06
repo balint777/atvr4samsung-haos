@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 
 from pyhap.accessory_driver import AccessoryDriver
-from pyhap.const import CATEGORY_TELEVISION
+from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
 
 
 SCRIPT = Path(os.environ.get("HOMEKIT_TV_SCRIPT", "/usr/local/bin/homekit_tv.py"))
@@ -53,6 +53,10 @@ try:
         }
         if accessory.category != CATEGORY_TELEVISION:
             raise SystemExit("minimal facade is not categorized as a Television")
+        if accessory.aid != STANDALONE_AID:
+            raise SystemExit("minimal facade is not a standalone HomeKit accessory")
+        if accessory.get_service("HAPProtocolInformation") is None:
+            raise SystemExit("minimal facade lacks HomeKit protocol information")
         if characteristics != expected:
             raise SystemExit(
                 f"minimal facade has unexpected characteristics: {characteristics}"
