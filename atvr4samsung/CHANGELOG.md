@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+- Add temporary, redaction-safe HomeKit connection and request diagnostics to
+  distinguish post-pairing transport, authorization, and accessory-read failures.
+- Suppress controller UUIDs and public keys from unknown Pair-Verify errors while
+  retaining the client address and rejection reason.
+
 ## 0.7.0
 
 - Select and privately persist an available HomeKit TV port automatically when

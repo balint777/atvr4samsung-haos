@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import tempfile
 
-from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
 
 
@@ -31,7 +30,7 @@ class FakeClient:
 loop = asyncio.new_event_loop()
 try:
     with tempfile.TemporaryDirectory() as directory:
-        driver = AccessoryDriver(
+        driver = module.DiagnosticAccessoryDriver(
             address="127.0.0.1",
             port=21064,
             persist_file=str(Path(directory) / "state"),
@@ -41,6 +40,8 @@ try:
         accessory = module.MinimalTelevisionAccessory(
             driver, "Image Check TV", FakeClient(), False
         )
+        if not isinstance(driver.http_server, module.DiagnosticHAPServer):
+            raise SystemExit("minimal facade lacks safe HAP request tracing")
         television = accessory.get_service("Television")
         characteristics = {
             characteristic.display_name for characteristic in television.characteristics

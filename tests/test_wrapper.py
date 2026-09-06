@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-import socket
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -318,8 +317,11 @@ class HomeKitLifecycleTests(unittest.TestCase):
     def test_automatic_homekit_port_is_private_stable_and_available(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "homekit-tv.port"
-            first = WRAPPER.resolve_homekit_tv_port(0, path=path)
-            second = WRAPPER.resolve_homekit_tv_port(0, path=path)
+            with patch.object(
+                WRAPPER, "_available_homekit_port", side_effect=[32123, 32123]
+            ):
+                first = WRAPPER.resolve_homekit_tv_port(0, path=path)
+                second = WRAPPER.resolve_homekit_tv_port(0, path=path)
 
             self.assertEqual(first, second)
             self.assertGreater(first, 0)
@@ -329,10 +331,11 @@ class HomeKitLifecycleTests(unittest.TestCase):
     def test_automatic_homekit_port_replaces_an_occupied_saved_port(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "homekit-tv.port"
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
-                listener.bind(("0.0.0.0", 0))
-                occupied = listener.getsockname()[1]
-                path.write_text(f"{occupied}\n", encoding="ascii")
+            occupied = 32123
+            path.write_text(f"{occupied}\n", encoding="ascii")
+            with patch.object(
+                WRAPPER, "_available_homekit_port", side_effect=[None, 32124]
+            ):
                 selected = WRAPPER.resolve_homekit_tv_port(0, path=path)
 
             self.assertNotEqual(selected, occupied)

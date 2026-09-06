@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,9 @@ from urllib import request as urllib_request
 from pyhap.accessory import Accessory
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
+from pyhap.hap_handler import HAPServerHandler
+from pyhap.hap_protocol import HAPServerProtocol
+from pyhap.hap_server import HAPServer
 
 
 HOME_ASSISTANT_API = "http://supervisor/core/api"
@@ -48,6 +52,82 @@ class HomeAssistantApiError(RuntimeError):
 
 def log(message: str) -> None:
     print(f"[homekit-tv] {message}", flush=True)
+
+
+class _RedactUnpairedVerifyFilter(logging.Filter):
+    """Keep dependency errors useful without printing controller public keys."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if "attempted pair verify" not in str(record.msg):
+            return True
+        arguments = record.args if isinstance(record.args, tuple) else ()
+        peer = arguments[1] if len(arguments) > 1 else "unknown client"
+        record.msg = "%s: Pair-Verify rejected because its controller identity is not paired."
+        record.args = (peer,)
+        return True
+
+
+logging.getLogger("pyhap.hap_handler").addFilter(_RedactUnpairedVerifyFilter())
+
+
+def _client_address_label(address: object) -> str:
+    if isinstance(address, tuple) and address:
+        return str(address[0])
+    return str(address)
+
+
+class DiagnosticHAPServerHandler(HAPServerHandler):
+    """Trace the HAP request boundary without logging private request data."""
+
+    def dispatch(self, request, body=None):
+        response = super().dispatch(request, body)
+        method = request.method.decode("ascii", errors="replace")
+        path = request.target.decode("ascii", errors="replace").partition("?")[0]
+        authorization = "paired" if self.client_uuid is not None else "unverified"
+        log(
+            f"[DEBUG-hkreq] {_client_address_label(self.client_address)} "
+            f"{method} {path} -> {response.status_code} ({authorization})"
+        )
+        return response
+
+
+class DiagnosticHAPServerProtocol(HAPServerProtocol):
+    """Install the redaction-safe handler on each HomeKit TCP connection."""
+
+    def connection_made(self, transport) -> None:
+        super().connection_made(transport)
+        self.handler = DiagnosticHAPServerHandler(
+            self.accessory_driver, self.peername
+        )
+        log(f"[DEBUG-hkreq] {_client_address_label(self.peername)} connected")
+
+    def connection_lost(self, exc: Exception) -> None:
+        peername = self.peername
+        super().connection_lost(exc)
+        log(f"[DEBUG-hkreq] {_client_address_label(peername)} disconnected")
+
+
+class DiagnosticHAPServer(HAPServer):
+    """Create request-tracing protocols while retaining HAP-python behavior."""
+
+    async def async_start(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+        self.server = await loop.create_server(
+            lambda: DiagnosticHAPServerProtocol(
+                loop, self.connections, self.accessory_handler
+            ),
+            self._addr_port[0],
+            self._addr_port[1],
+        )
+        self.async_cleanup_connections()
+
+
+class DiagnosticAccessoryDriver(AccessoryDriver):
+    """Accessory driver with temporary, redaction-safe request tracing."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.http_server = DiagnosticHAPServer(self.http_server._addr_port, self)
 
 
 class HomeAssistantClient:
@@ -318,7 +398,7 @@ def main(arguments: list[str] | None = None) -> int:
         pincode = load_or_create_pincode(args.pincode_file)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        driver = AccessoryDriver(
+        driver = DiagnosticAccessoryDriver(
             port=args.port,
             persist_file=str(args.persist_file),
             pincode=pincode,

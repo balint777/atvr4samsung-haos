@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import logging
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
+import h11
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import CATEGORY_TELEVISION, STANDALONE_AID
+from pyhap.hap_handler import HAPServerHandler
 
 
 SCRIPT_PATH = (
@@ -133,6 +136,80 @@ class HomeAssistantClientTests(unittest.TestCase):
         self.assertEqual(request.get_header("Authorization"), "Bearer secret-token")
         self.assertNotIn(b"secret-token", request.data)
         self.assertEqual(json.loads(request.data), {"entity_id": "media_player.tv"})
+
+
+class HomeKitDiagnosticTests(unittest.TestCase):
+    def test_unpaired_verify_log_filter_removes_controller_keys(self) -> None:
+        record = logging.LogRecord(
+            "pyhap.hap_handler",
+            logging.ERROR,
+            __file__,
+            1,
+            "%s: Client %s with uuid %s attempted pair verify without being paired "
+            "first (public_key=%s, paired clients=%s).",
+            (
+                "Living Room TV",
+                ("192.0.2.10", 54321),
+                "controller-id",
+                "public-key-value",
+                {"paired-id": "paired-key-value"},
+            ),
+            None,
+        )
+
+        self.assertTrue(HOMEKIT._RedactUnpairedVerifyFilter().filter(record))
+        message = record.getMessage()
+        self.assertEqual(
+            message,
+            "('192.0.2.10', 54321): Pair-Verify rejected because its controller "
+            "identity is not paired.",
+        )
+        self.assertNotIn("public-key-value", message)
+        self.assertNotIn("paired-key-value", message)
+
+    def test_request_trace_omits_headers_query_and_body(self) -> None:
+        accessory_handler = MagicMock()
+        handler = HOMEKIT.DiagnosticHAPServerHandler(
+            accessory_handler, ("192.0.2.10", 54321)
+        )
+        request = h11.Request(
+            method=b"PUT",
+            target=b"/characteristics?id=1.9&private=value",
+            headers=[
+                (b"host", b"tv.local"),
+                (b"authorization", b"Bearer secret-token"),
+            ],
+        )
+        response = MagicMock(status_code=207)
+
+        with (
+            patch.object(HAPServerHandler, "dispatch", return_value=response),
+            patch.object(HOMEKIT, "log") as logged,
+        ):
+            self.assertIs(handler.dispatch(request, b'{"pin":"123-45-678"}'), response)
+
+        message = logged.call_args.args[0]
+        self.assertEqual(
+            message,
+            "[DEBUG-hkreq] 192.0.2.10 PUT /characteristics -> 207 (unverified)",
+        )
+        self.assertNotIn("secret-token", message)
+        self.assertNotIn("private", message)
+        self.assertNotIn("123-45-678", message)
+
+    def test_diagnostic_driver_uses_request_tracing_server(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            loop = asyncio.new_event_loop()
+            self.addCleanup(loop.close)
+            driver = HOMEKIT.DiagnosticAccessoryDriver(
+                address="127.0.0.1",
+                port=21064,
+                persist_file=str(Path(directory) / "homekit.state"),
+                pincode=b"246-80-135",
+                loop=loop,
+            )
+
+        self.assertIsInstance(driver.http_server, HOMEKIT.DiagnosticHAPServer)
 
 
 if __name__ == "__main__":
