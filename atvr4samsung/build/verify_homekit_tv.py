@@ -62,6 +62,30 @@ try:
             raise SystemExit(
                 f"minimal facade has unexpected characteristics: {characteristics}"
             )
+        if len(television.linked_services) != 1:
+            raise SystemExit("minimal facade lacks its required linked input source")
+        input_source = television.linked_services[0]
+        input_characteristics = {
+            characteristic.display_name
+            for characteristic in input_source.characteristics
+        }
+        expected_input_characteristics = {
+            "ConfiguredName",
+            "CurrentVisibilityState",
+            "Identifier",
+            "InputSourceType",
+            "IsConfigured",
+        }
+        if input_characteristics != expected_input_characteristics:
+            raise SystemExit(
+                "minimal facade has unexpected input characteristics: "
+                f"{input_characteristics}"
+            )
+        if (
+            television.get_characteristic("ActiveIdentifier").value
+            != input_source.get_characteristic("Identifier").value
+        ):
+            raise SystemExit("minimal facade has no valid active input identifier")
         for forbidden_service in ("TargetControl", "TelevisionSpeaker"):
             if accessory.get_service(forbidden_service) is not None:
                 raise SystemExit(f"minimal facade includes {forbidden_service}")

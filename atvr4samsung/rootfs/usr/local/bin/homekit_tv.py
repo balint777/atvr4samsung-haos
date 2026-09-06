@@ -292,14 +292,37 @@ class MinimalTelevisionAccessory(Accessory):
         self.active.set_value(1 if initial_active else 0, should_notify=False)
         self.active.getter_callback = self.get_active
         self.active.setter_callback = self.set_active
-        television.get_characteristic("ActiveIdentifier").set_value(
-            0, should_notify=False
-        )
+        # Apple requires ActiveIdentifier to reference a linked InputSource,
+        # even when the television does not offer input switching.
+        active_identifier = television.get_characteristic("ActiveIdentifier")
+        active_identifier.set_value(0, should_notify=False)
         television.get_characteristic("ConfiguredName").set_value(
             name, should_notify=False
         )
         television.get_characteristic("SleepDiscoveryMode").set_value(
             1, should_notify=False
+        )
+
+        input_source = self.add_preload_service(
+            "InputSource",
+            ["Identifier"],
+            unique_id="power-only-tv",
+        )
+        television.add_linked_service(input_source)
+        input_source.get_characteristic("Identifier").set_value(
+            0, should_notify=False
+        )
+        input_source.get_characteristic("ConfiguredName").set_value(
+            name, should_notify=False
+        )
+        input_source.get_characteristic("InputSourceType").set_value(
+            1, should_notify=False
+        )
+        input_source.get_characteristic("IsConfigured").set_value(
+            1, should_notify=False
+        )
+        input_source.get_characteristic("CurrentVisibilityState").set_value(
+            0, should_notify=False
         )
         self.set_info_service(
             manufacturer="atvr4samsung",

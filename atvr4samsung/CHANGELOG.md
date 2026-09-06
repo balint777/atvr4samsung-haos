@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2
+
+- Link the television's required active-input identifier to one inert Home
+  Screen input source, so Apple Home receives a valid television service graph
+  without gaining remote keys or input-switching controls.
+- Retain the temporary, redaction-safe HomeKit request trace for confirmation
+  against the affected iPhone before removing the diagnostics.
+
 ## 0.7.1
 
 - Add temporary, redaction-safe HomeKit connection and request diagnostics to

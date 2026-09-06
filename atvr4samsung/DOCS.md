@@ -115,7 +115,9 @@ This is an experimental workaround for installations where Home Assistant's
 normal HomeKit Television creates an unwanted second target in Control Center's
 Apple TV Remote. The add-on's minimal accessory identifies itself to Apple Home
 as a television but deliberately omits HomeKit remote keys, target control,
-speaker control and inputs. Companion Link remains the only full remote target.
+speaker control and input switching. It publishes one inert Home Screen input
+only to keep the HomeKit television definition valid. Companion Link remains
+the only full remote implementation.
 
 Before enabling it, exclude the Samsung TV from any existing Home Assistant
 HomeKit Bridge. Otherwise that bridge will continue advertising its own full

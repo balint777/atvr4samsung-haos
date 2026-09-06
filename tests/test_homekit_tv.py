@@ -64,6 +64,32 @@ class MinimalTelevisionTests(unittest.TestCase):
         self.assertIsNone(accessory.get_service("TelevisionSpeaker"))
         self.assertIsNone(accessory.get_service("TargetControl"))
 
+    def test_active_identifier_matches_a_linked_input_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, accessory, _ = self.build_accessory(directory)
+
+        television = accessory.get_service("Television")
+        self.assertEqual(len(television.linked_services), 1)
+        input_source = television.linked_services[0]
+        self.assertEqual(input_source.display_name, "InputSource")
+        self.assertEqual(
+            {
+                characteristic.display_name
+                for characteristic in input_source.characteristics
+            },
+            {
+                "ConfiguredName",
+                "CurrentVisibilityState",
+                "Identifier",
+                "InputSourceType",
+                "IsConfigured",
+            },
+        )
+        self.assertEqual(
+            television.get_characteristic("ActiveIdentifier").value,
+            input_source.get_characteristic("Identifier").value,
+        )
+
     def test_is_a_standalone_accessory_with_protocol_information(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             _, accessory, _ = self.build_accessory(directory)
