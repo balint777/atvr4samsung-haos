@@ -14,6 +14,7 @@ import secrets
 import signal
 import sys
 import tempfile
+import time
 from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -47,7 +48,17 @@ INACTIVE_STATES = {"off", "standby", "unavailable", "unknown"}
 
 
 class HomeAssistantApiError(RuntimeError):
-    """A Home Assistant Core API request failed."""
+    """A Home Assistant Core API request failed.
+
+    ``transient`` marks failures that are expected to clear on their own, such
+    as the Supervisor proxy answering with a 5xx or the request timing out
+    while Home Assistant Core is still booting. Non-transient failures (bad
+    token, wrong entity, malformed request) will not improve by retrying.
+    """
+
+    def __init__(self, message: str, *, transient: bool = False) -> None:
+        super().__init__(message)
+        self.transient = transient
 
 
 def log(message: str) -> None:
@@ -162,15 +173,18 @@ class HomeAssistantClient:
                 body = response.read()
                 if not 200 <= response.status < 300:
                     raise HomeAssistantApiError(
-                        f"Home Assistant returned HTTP {response.status}"
+                        f"Home Assistant returned HTTP {response.status}",
+                        transient=response.status >= 500,
                     )
         except urllib_error.HTTPError as exc:
             raise HomeAssistantApiError(
-                f"Home Assistant returned HTTP {exc.code}"
+                f"Home Assistant returned HTTP {exc.code}",
+                transient=exc.code >= 500,
             ) from None
         except (OSError, urllib_error.URLError) as exc:
             raise HomeAssistantApiError(
-                f"Home Assistant request failed: {type(exc).__name__}"
+                f"Home Assistant request failed: {type(exc).__name__}",
+                transient=True,
             ) from None
         if not body:
             return None
@@ -389,6 +403,50 @@ class MinimalTelevisionAccessory(Accessory):
         self.refresh_active()
 
 
+def probe_initial_active(
+    client: HomeAssistantClient,
+    *,
+    attempts: int = 12,
+    base_delay: float = 2.0,
+    max_delay: float = 10.0,
+    sleep=None,
+) -> bool:
+    """Read the TV's initial power state, tolerating a slow Core boot.
+
+    Home Assistant Core often is not ready when the add-on starts after a host
+    reboot; the Supervisor proxy then answers with a transient error such as
+    HTTP 502 or a timeout. Retry with bounded backoff instead of aborting
+    startup, and if Core stays unreachable, assume the TV is inactive. The
+    accessory self-corrects on its next periodic refresh once Core responds.
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    sleep = sleep or time.sleep
+    last_error: HomeAssistantApiError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return client.is_active()
+        except HomeAssistantApiError as exc:
+            if not exc.transient:
+                # A bad token, wrong entity, or malformed request will not
+                # recover on its own; surface it so startup fails loudly.
+                raise
+            last_error = exc
+            if attempt == attempts:
+                break
+            delay = min(base_delay * attempt, max_delay)
+            log(
+                "Home Assistant is not ready yet "
+                f"({exc}); retry {attempt}/{attempts - 1} in {delay:.0f}s."
+            )
+            sleep(delay)
+    log(
+        "Home Assistant did not become reachable during startup "
+        f"({last_error}); assuming the TV is off until it responds."
+    )
+    return False
+
+
 def parse_args(arguments: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", required=True)
@@ -417,7 +475,7 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         token = os.environ.get("SUPERVISOR_TOKEN", "")
         client = HomeAssistantClient(token, args.entity_id)
-        initial_active = client.is_active()
+        initial_active = probe_initial_active(client)
         pincode = load_or_create_pincode(args.pincode_file)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

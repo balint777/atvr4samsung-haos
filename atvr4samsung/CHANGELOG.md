@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.3
+
+- Retry the HomeKit television's initial Home Assistant power-state read with
+  bounded backoff instead of aborting startup, so a transient Supervisor proxy
+  error (for example HTTP 502 or a timeout while Core is still booting after a
+  host reboot) no longer kills the add-on in a crash loop. Non-transient
+  failures (bad token, wrong entity) still fail fast, and if Core stays
+  unreachable the accessory starts assuming the TV is off and self-corrects on
+  its next periodic refresh.
+
 ## 0.7.2
 
 - Link the television's required active-input identifier to one inert Home

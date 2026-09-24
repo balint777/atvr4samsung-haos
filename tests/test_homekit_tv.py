@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
+from urllib import error as urllib_error
 
 import h11
 from pyhap.accessory_driver import AccessoryDriver
@@ -236,6 +237,103 @@ class HomeKitDiagnosticTests(unittest.TestCase):
             )
 
         self.assertIsInstance(driver.http_server, HOMEKIT.DiagnosticHAPServer)
+
+
+class ProbeInitialActiveTests(unittest.TestCase):
+    def _client(self, side_effect):
+        client = MagicMock()
+        client.entity_id = "media_player.tv"
+        client.is_active.side_effect = side_effect
+        return client
+
+    def test_returns_state_on_first_success(self) -> None:
+        client = self._client([True])
+        slept: list[float] = []
+        result = HOMEKIT.probe_initial_active(client, sleep=slept.append)
+        self.assertTrue(result)
+        self.assertEqual(slept, [])
+
+    def test_retries_transient_errors_then_succeeds(self) -> None:
+        transient = HOMEKIT.HomeAssistantApiError(
+            "Home Assistant returned HTTP 502", transient=True
+        )
+        client = self._client([transient, transient, False])
+        slept: list[float] = []
+        result = HOMEKIT.probe_initial_active(
+            client, base_delay=2.0, max_delay=10.0, sleep=slept.append
+        )
+        self.assertFalse(result)
+        self.assertEqual(client.is_active.call_count, 3)
+        self.assertEqual(slept, [2.0, 4.0])
+
+    def test_assumes_off_after_exhausting_transient_retries(self) -> None:
+        transient = HOMEKIT.HomeAssistantApiError(
+            "Home Assistant request failed: TimeoutError", transient=True
+        )
+        client = self._client([transient, transient, transient])
+        slept: list[float] = []
+        result = HOMEKIT.probe_initial_active(
+            client, attempts=3, sleep=slept.append
+        )
+        self.assertFalse(result)
+        self.assertEqual(client.is_active.call_count, 3)
+        self.assertEqual(len(slept), 2)
+
+    def test_non_transient_error_fails_fast(self) -> None:
+        fatal = HOMEKIT.HomeAssistantApiError(
+            "Home Assistant returned no usable state for media_player.tv"
+        )
+        client = self._client([fatal])
+        slept: list[float] = []
+        with self.assertRaises(HOMEKIT.HomeAssistantApiError):
+            HOMEKIT.probe_initial_active(client, sleep=slept.append)
+        self.assertEqual(client.is_active.call_count, 1)
+        self.assertEqual(slept, [])
+
+    def test_caps_backoff_at_max_delay(self) -> None:
+        transient = HOMEKIT.HomeAssistantApiError("HTTP 503", transient=True)
+        client = self._client([transient] * 6 + [True])
+        slept: list[float] = []
+        HOMEKIT.probe_initial_active(
+            client, base_delay=2.0, max_delay=6.0, sleep=slept.append
+        )
+        self.assertEqual(slept, [2.0, 4.0, 6.0, 6.0, 6.0, 6.0])
+
+
+class HomeAssistantErrorClassificationTests(unittest.TestCase):
+    def _error(self, urlopen_side_effect) -> HOMEKIT.HomeAssistantApiError:
+        client = HOMEKIT.HomeAssistantClient("secret", "media_player.tv")
+        with patch.object(
+            HOMEKIT.urllib_request, "urlopen", side_effect=urlopen_side_effect
+        ):
+            try:
+                client.is_active()
+            except HOMEKIT.HomeAssistantApiError as exc:
+                return exc
+        raise AssertionError("expected HomeAssistantApiError")
+
+    def test_http_502_is_transient(self) -> None:
+        error = urllib_error.HTTPError(
+            "http://supervisor/core/api/states/media_player.tv",
+            502,
+            "Bad Gateway",
+            {},
+            None,
+        )
+        self.assertTrue(self._error(error).transient)
+
+    def test_timeout_is_transient(self) -> None:
+        self.assertTrue(self._error(TimeoutError()).transient)
+
+    def test_http_400_is_not_transient(self) -> None:
+        error = urllib_error.HTTPError(
+            "http://supervisor/core/api/states/media_player.tv",
+            400,
+            "Bad Request",
+            {},
+            None,
+        )
+        self.assertFalse(self._error(error).transient)
 
 
 if __name__ == "__main__":
